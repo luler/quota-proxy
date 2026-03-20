@@ -28,6 +28,6 @@ COPY --from=builder /app/main .
 COPY config.yaml .
 
 # 设置容器暴露端口
-EXPOSE 8081
+EXPOSE 3000
 
 CMD ["./main","serve"]

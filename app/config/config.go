@@ -127,7 +127,7 @@ func Load() (*Config, error) {
 // setDefaults 设置默认值
 func setDefaults(v *viper.Viper) {
 	// Server
-	v.SetDefault("server.port", 8081)
+	v.SetDefault("server.port", 3000)
 	v.SetDefault("server.read_timeout", "10s")
 	v.SetDefault("server.write_timeout", "30s")
 

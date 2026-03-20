@@ -1,9 +1,9 @@
 services:
   quota_middleware:
-    build: .
+    image: ghcr.io/luler/model_auto_switch:latest
     restart: always
     ports:
-      - "8081:8081"
+      - "20263:3000"
     volumes:
       - ./runtime:/app/runtime
       - ./config.yaml:/app/config.yaml:ro
@@ -17,17 +17,6 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
-    ports:
-      - "6379:6379"
     volumes:
-      - redis_data:/data
+      - ./redis_data:/data
     command: redis-server --appendonly yes
-    networks:
-      - quota_network
-
-networks:
-  quota_network:
-    driver: bridge
-
-volumes:
-  redis_data:

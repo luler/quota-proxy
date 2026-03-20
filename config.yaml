@@ -2,7 +2,7 @@
 
 # 服务配置
 server:
-  port: 8081
+  port: 3000
   read_timeout: 10s
   write_timeout: 30s
 

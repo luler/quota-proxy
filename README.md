@@ -53,7 +53,7 @@ go run main.go serve
 ```yaml
 # 服务配置
 server:
-  port: 8081
+  port: 3000
   read_timeout: 10s
   write_timeout: 30s
 
@@ -377,6 +377,3 @@ go build -o main .
 | Redis 异常 (fail-open)  | 请求正常转发                 |
 | Redis 异常 (fail-close) | 返回 503                 |
 
-## License
-
-MIT
