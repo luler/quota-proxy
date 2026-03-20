@@ -1,6 +1,6 @@
 services:
   quota_middleware:
-    image: ghcr.io/luler/model_auto_switch:latest
+    image: ghcr.io/luler/quota-proxy:latest
     restart: always
     ports:
       - "20263:3000"
@@ -11,8 +11,6 @@ services:
       - TZ=${TZ:-Asia/Shanghai}
     depends_on:
       - redis
-    networks:
-      - quota_network
 
   redis:
     image: redis:7-alpine
