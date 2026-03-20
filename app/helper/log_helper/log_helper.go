@@ -17,19 +17,28 @@ func InitlogHelper() {
 	//设置日志格式
 	logHelper.SetFormatter(&logrus.TextFormatter{
 		TimestampFormat: "2006-01-02 15:04:05.000",
-		FullTimestamp:   true, // 显示完整的时间戳
+		FullTimestamp:   true,
+		DisableColors:   true,
+		FieldMap: logrus.FieldMap{
+			logrus.FieldKeyTime:  "time",
+			logrus.FieldKeyLevel: "level",
+			logrus.FieldKeyMsg:   "msg",
+		},
 		SortingFunc: func(keys []string) {
 			order := map[string]int{
-				"status":   0,
-				"method":   1,
-				"path":     2,
-				"rule":     3,
-				"identity": 4,
-				"success":  5,
-				"pending":  6,
-				"elapsed":  7,
-				"error":    8,
-				"panic":    9,
+				"time":     0,
+				"level":    1,
+				"msg":      2,
+				"status":   3,
+				"method":   4,
+				"path":     5,
+				"rule":     6,
+				"identity": 7,
+				"success":  8,
+				"pending":  9,
+				"elapsed":  10,
+				"error":    11,
+				"panic":    12,
 			}
 			sort.Slice(keys, func(i, j int) bool {
 				left, lok := order[keys[i]]

@@ -16,5 +16,5 @@ services:
     image: redis:7-alpine
     restart: always
     volumes:
-      - ./redis_data:/data
+      - ./runtime/redis_data:/data
     command: redis-server --appendonly yes
