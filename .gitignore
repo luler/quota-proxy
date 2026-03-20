@@ -1,0 +1,14 @@
+/.idea
+*.db
+*.exe
+.env
+.claude
+
+# Binary
+main
+
+# Logs
+runtime/logs/*.log
+
+# Test files
+*_test.go

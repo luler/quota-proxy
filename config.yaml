@@ -1,0 +1,100 @@
+# 成功访问次数限制中间件配置
+
+# 服务配置
+server:
+  port: 8081
+  read_timeout: 10s
+  write_timeout: 30s
+
+# 上游服务配置
+upstream:
+  target: https://fastgpt.luler.top:443
+
+# Redis 配置
+redis:
+  addr: redis:6379
+  password: ""
+  db: 0
+
+# 访问主体识别配置
+identity:
+  # 当前按请求头优先级识别访问主体
+  strategy: header_priority
+  # 按顺序检查这些请求头，命中的第一个非空值会作为 identity
+  # 最终 identity 格式类似：X-User-Id:user123
+  headers:
+    - X-User-Id
+  # 当前面配置的请求头都不存在时，是否回退为客户端 IP（例如 ip:127.0.0.1）
+  fallback_to_ip: true
+
+# 配额配置
+quota:
+  enabled: true
+
+  # 时间窗口按哪个时区计算
+  # day 模式下，按这个时区的 00:00 切天
+  # hour/minute 模式下，也按这个时区计算窗口边界
+  timezone: Asia/Shanghai
+
+  # 命中这些路径的请求不做配额检查，优先级高于下面的 rules
+  exclude_paths:
+    - /health
+    - /metrics
+
+  # Redis 异常时是否放行：
+  # true  = 放行请求，但不计次
+  # false = 直接返回错误
+  fail_open: true
+
+  # 按顺序匹配路径规则，命中第一个规则后即使用该规则的窗口和次数限制
+  rules:
+    # 聊天接口：按天限制 2 次
+    - name: chat-daily
+      # 限流时间窗口：minute / hour / day
+      window: day
+      # 当前时间窗口内允许的最大成功次数
+      success_limit: 2
+      # 命中这些路径时使用本规则
+      include_paths:
+        - /api/core/chat/**
+      # 可选：请求内容检测，默认不配置则不生效
+      # 只有 include_paths 命中后，下面条件才会继续参与匹配
+      request_match:
+        # 检测 query + form 参数值中是否包含指定字符串
+        query_form_contains: ""
+        # 检测 JSON 请求体文本中是否包含指定字符串
+        json_body_contains: "coder-model-aiproxy"
+        # 检测任意请求头值中是否包含指定字符串
+        header_contains: ""
+      # 可选：配额超限后的自定义返回内容；不配置则使用默认 JSON
+      # 设置为普通文本时返回纯文本
+      # 设置为空字符串时返回 429 且不返回任何内容
+      # 若文本本身是合法 JSON，则按 JSON 返回
+      quota_exceeded_body: 请求过于频繁，请稍后再试
+
+    # 示例：空响应体
+    - name: other-api-hourly
+      window: hour
+      success_limit: 20
+      include_paths:
+        - /api/other/**
+      quota_exceeded_body: ""
+
+# 成功判定规则
+success_rule:
+  # status_code: 仅按 HTTP 状态码判断是否成功
+  # json_field: 先看 HTTP 状态码（若 require_http_2xx=true），再判断响应 JSON 字段是否等于 expected_value
+  # SSE（text/event-stream）为流式特例：不读取完整 body，不使用 json_field；并且仍会先按 require_http_2xx 检查状态码，满足后在首个有效事件写出后计为成功
+  mode: status_code  # status_code 或 json_field
+  # 为 true 时，只有 HTTP 2xx 才可能判定为成功
+  # 为 false 时，status_code 模式下 < 400 也算成功；json_field 模式下则不强制要求 2xx
+  require_http_2xx: true
+  # 仅在 mode=json_field 时生效，表示读取响应 JSON 中的哪个字段
+  json_field: code
+  # 仅在 mode=json_field 时生效，表示字段值等于多少时算成功
+  expected_value: 0
+
+# 日志配置
+logging:
+  level: info
+  access_log: true
