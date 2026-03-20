@@ -24,8 +24,8 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # 复制主程序
 COPY --from=builder /app/main .
 
-# 复制配置文件
-COPY config.yaml .
+# 复制示例配置文件
+COPY config.yaml.example ./config.yaml
 
 # 设置容器暴露端口
 EXPOSE 3000
