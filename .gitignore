@@ -12,3 +12,5 @@ runtime/logs/*.log
 
 # Test files
 *_test.go
+
+config.yaml

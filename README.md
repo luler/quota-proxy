@@ -1,4 +1,4 @@
-# 成功访问次数限制中间件
+# 接口请求配额中间件
 
 一个独立的 HTTP 中间件服务，作为反向代理部署在客户端与后端之间，实现按访问主体限制时间窗口内成功访问次数的功能。
 
@@ -32,6 +32,9 @@ Client -> Quota Middleware -> Backend
 git clone https://github.com/luler/quota-proxy.git
 cd quota-proxy
 
+# 复制配置文件
+cp config.yaml.example config.yaml
+
 # 启动服务
 docker-compose up -d
 ```
@@ -48,7 +51,7 @@ go run main.go serve
 
 ## 配置说明
 
-配置文件 `config.yaml`：
+配置文件 `config.yaml.example`：
 
 ```yaml
 # 服务配置
