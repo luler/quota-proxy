@@ -48,10 +48,12 @@ quota:
 
   # 按顺序匹配路径规则，命中第一个规则后即使用该规则的窗口和次数限制
   rules:
-    # 聊天接口：按天限制 2 次
+    # 聊天接口：按 1 天限制 2 次
     - name: chat-daily
       # 限流时间窗口：minute / hour / day
       window: day
+      # 窗口数量，默认 1；minute/hour/day 都支持大于等于 1 的整数
+      window_count: 1
       # 当前时间窗口内允许的最大成功次数
       success_limit: 2
       # 命中这些路径时使用本规则
@@ -75,6 +77,7 @@ quota:
     # 示例：空响应体
     - name: other-api-hourly
       window: hour
+      window_count: 1
       success_limit: 20
       include_paths:
         - /api/other/**

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -65,6 +66,7 @@ type QuotaRuleRequestMatchConfig struct {
 type QuotaRuleConfig struct {
 	Name              string                      `mapstructure:"name"`
 	Window            string                      `mapstructure:"window"`
+	WindowCount       int                         `mapstructure:"window_count"`
 	SuccessLimit      int                         `mapstructure:"success_limit"`
 	IncludePaths      []string                    `mapstructure:"include_paths"`
 	RequestMatch      QuotaRuleRequestMatchConfig `mapstructure:"request_match"`
@@ -120,8 +122,28 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	if err := validateQuotaRules(&cfg); err != nil {
+		return nil, err
+	}
+
 	appConfig = &cfg
 	return &cfg, nil
+}
+
+func validateQuotaRules(cfg *Config) error {
+	for _, rule := range cfg.Quota.Rules {
+		switch strings.ToLower(rule.Window) {
+		case "minute", "hour", "day":
+		default:
+			return fmt.Errorf("invalid quota.rules[%s].window: %q, must be one of minute/hour/day", rule.Name, rule.Window)
+		}
+
+		if rule.WindowCount < 1 {
+			return fmt.Errorf("invalid quota.rules[%s].window_count: %d, must be >= 1", rule.Name, rule.WindowCount)
+		}
+	}
+
+	return nil
 }
 
 // setDefaults 设置默认值
@@ -153,6 +175,7 @@ func setDefaults(v *viper.Viper) {
 		{
 			"name":          "default",
 			"window":        "day",
+			"window_count":  1,
 			"success_limit": 10,
 			"include_paths": []string{"/**"},
 		},

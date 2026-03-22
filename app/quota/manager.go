@@ -11,15 +11,27 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+type windowSpec struct {
+	name      string
+	count     int
+	duration  time.Duration
+	dayWindow bool
+}
+
+func formatWindow(rule *config.QuotaRuleConfig) string {
+	return strings.ToLower(rule.Window)
+}
+
 // QuotaStatus 配额状态
 type QuotaStatus struct {
-	RuleName  string `json:"rule_name"`
-	Success   int    `json:"success_count"`
-	Pending   int    `json:"pending_count"`
-	Limit     int    `json:"limit"`
-	Remaining int    `json:"remaining"`
-	Window    string `json:"window"`
-	PeriodKey string `json:"period_key"`
+	RuleName    string `json:"rule_name"`
+	Success     int    `json:"success_count"`
+	Pending     int    `json:"pending_count"`
+	Limit       int    `json:"limit"`
+	Remaining   int    `json:"remaining"`
+	Window      string `json:"window"`
+	WindowCount int    `json:"window_count"`
+	PeriodKey   string `json:"period_key"`
 }
 
 // Manager 配额管理器
@@ -63,52 +75,85 @@ func (m *Manager) buildKey(ruleName, periodKey, identity string) string {
 	return fmt.Sprintf("quota:%s:%s:%s", ruleName, periodKey, identity)
 }
 
-func (m *Manager) normalizedWindow(window string) string {
-	switch strings.ToLower(window) {
-	case "minute", "hour", "day":
-		return strings.ToLower(window)
-	default:
-		return "day"
-	}
-}
-
 func (m *Manager) now() time.Time {
 	return time.Now().In(m.timezone)
 }
 
-func (m *Manager) getPeriodTTL(window string) int {
-	now := m.now()
+func (m *Manager) normalizedWindow(window string) string {
+	return strings.ToLower(window)
+}
 
-	switch m.normalizedWindow(window) {
+func (m *Manager) normalizedWindowCount(rule *config.QuotaRuleConfig) int {
+	if rule.WindowCount < 1 {
+		return 1
+	}
+	return rule.WindowCount
+}
+
+func (m *Manager) getWindowSpec(rule *config.QuotaRuleConfig) windowSpec {
+	window := m.normalizedWindow(rule.Window)
+	count := m.normalizedWindowCount(rule)
+
+	switch window {
 	case "minute":
-		next := now.Truncate(time.Minute).Add(time.Minute)
-		return int(next.Sub(now).Seconds())
+		return windowSpec{name: window, count: count, duration: time.Duration(count) * time.Minute}
 	case "hour":
-		next := now.Truncate(time.Hour).Add(time.Hour)
-		return int(next.Sub(now).Seconds())
+		return windowSpec{name: window, count: count, duration: time.Duration(count) * time.Hour}
 	default:
-		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, m.timezone)
-		return int(next.Sub(now).Seconds())
+		return windowSpec{name: "day", count: count, dayWindow: true}
 	}
 }
 
-func (m *Manager) getPeriodKey(window string) string {
-	now := m.now()
+func (m *Manager) getWindowStart(now time.Time, spec windowSpec) time.Time {
+	if spec.dayWindow {
+		reference := time.Date(1970, 1, 1, 0, 0, 0, 0, m.timezone)
+		daysSinceReference := int(now.Sub(reference) / (24 * time.Hour))
+		bucketDays := daysSinceReference / spec.count * spec.count
+		return reference.AddDate(0, 0, bucketDays)
+	}
 
-	switch m.normalizedWindow(window) {
+	return now.Truncate(spec.duration)
+}
+
+func (m *Manager) getWindowEnd(start time.Time, spec windowSpec) time.Time {
+	if spec.dayWindow {
+		return start.AddDate(0, 0, spec.count)
+	}
+
+	return start.Add(spec.duration)
+}
+
+func (m *Manager) getPeriodTTL(rule *config.QuotaRuleConfig) int {
+	now := m.now()
+	spec := m.getWindowSpec(rule)
+	start := m.getWindowStart(now, spec)
+	end := m.getWindowEnd(start, spec)
+	ttl := int(end.Sub(now).Seconds())
+	if ttl < 1 {
+		return 1
+	}
+	return ttl
+}
+
+func (m *Manager) getPeriodKey(rule *config.QuotaRuleConfig) string {
+	now := m.now()
+	spec := m.getWindowSpec(rule)
+	start := m.getWindowStart(now, spec)
+
+	switch spec.name {
 	case "minute":
-		return now.Format("2006-01-02-15-04")
+		return start.Format("2006-01-02-15-04")
 	case "hour":
-		return now.Format("2006-01-02-15")
+		return start.Format("2006-01-02-15")
 	default:
-		return now.Format("2006-01-02")
+		return start.Format("2006-01-02")
 	}
 }
 
 // TryReserve 尝试预占名额
 func (m *Manager) TryReserve(rule *config.QuotaRuleConfig, identity string) (bool, int, int, error) {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule.Window), identity)
-	ttl := m.getPeriodTTL(rule.Window)
+	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
+	ttl := m.getPeriodTTL(rule)
 
 	ctx := context.Background()
 	result, err := m.client.Eval(ctx, TryReserveScript, []string{key}, rule.SuccessLimit, ttl).Result()
@@ -130,7 +175,7 @@ func (m *Manager) TryReserve(rule *config.QuotaRuleConfig, identity string) (boo
 
 // Confirm 确认成功
 func (m *Manager) Confirm(rule *config.QuotaRuleConfig, identity string) error {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule.Window), identity)
+	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
 	ctx := context.Background()
 	_, err := m.client.Eval(ctx, ConfirmScript, []string{key}).Result()
 	return err
@@ -138,7 +183,7 @@ func (m *Manager) Confirm(rule *config.QuotaRuleConfig, identity string) error {
 
 // Rollback 回滚 pending
 func (m *Manager) Rollback(rule *config.QuotaRuleConfig, identity string) error {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule.Window), identity)
+	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
 	ctx := context.Background()
 	_, err := m.client.Eval(ctx, RollbackScript, []string{key}).Result()
 	return err
@@ -168,7 +213,7 @@ func (m *Manager) GetAllStatus(identity string) ([]*QuotaStatus, error) {
 }
 
 func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string) (*QuotaStatus, error) {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule.Window), identity)
+	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
 	ctx := context.Background()
 	result, err := m.client.Eval(ctx, GetQuotaScript, []string{key}).Result()
 	if err != nil {
@@ -188,13 +233,14 @@ func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string)
 	}
 
 	return &QuotaStatus{
-		RuleName:  rule.Name,
-		Success:   successCount,
-		Pending:   pendingCount,
-		Limit:     rule.SuccessLimit,
-		Remaining: remaining,
-		Window:    m.normalizedWindow(rule.Window),
-		PeriodKey: m.getPeriodKey(rule.Window),
+		RuleName:    rule.Name,
+		Success:     successCount,
+		Pending:     pendingCount,
+		Limit:       rule.SuccessLimit,
+		Remaining:   remaining,
+		Window:      formatWindow(rule),
+		WindowCount: m.normalizedWindowCount(rule),
+		PeriodKey:   m.getPeriodKey(rule),
 	}, nil
 }
 
@@ -219,7 +265,7 @@ func (m *Manager) ResetAll(identity string) error {
 }
 
 func (m *Manager) resetByRule(rule *config.QuotaRuleConfig, identity string) error {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule.Window), identity)
+	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
 	ctx := context.Background()
 	_, err := m.client.Eval(ctx, ResetScript, []string{key}).Result()
 	return err

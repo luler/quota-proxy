@@ -11,7 +11,7 @@
 - **多种成功判定**：支持 HTTP 状态码或 JSON 字段判定
 - **SSE 支持**：支持流式响应转发，并在首个有效事件后确认成功计次
 - **自定义超限响应**：支持默认 JSON、纯文本、空响应体、JSON 文本响应
-- **自动过期**：配额数据会在当前 minute/hour/day 窗口结束后自动过期
+- **自动过期**：配额数据会在当前 window/window_count 对应的时间窗口结束后自动过期
 - **容错处理**：支持 fail-open 和 fail-close 模式
 - **管理接口**：提供查询和重置配额的接口
 
@@ -88,6 +88,7 @@ quota:
   rules:
     - name: chat-daily
       window: day
+      window_count: 1
       success_limit: 2
       include_paths:
         - /api/core/chat/**
@@ -99,6 +100,7 @@ quota:
 
     - name: other-api-hourly
       window: hour
+      window_count: 1
       success_limit: 20
       include_paths:
         - /api/other/**
@@ -108,7 +110,9 @@ quota:
 ### 路径规则说明
 
 - `quota.rules` 按顺序匹配
-- 请求命中第一个规则后，即使用该规则的 `window` 和 `success_limit`
+- 请求命中第一个规则后，即使用该规则的 `window`、`window_count` 和 `success_limit`
+- `window_count` 默认值为 `1`，必须是大于等于 `1` 的整数
+- 例如：`window: minute + window_count: 5` 表示 5 分钟窗口；`window: day + window_count: 7` 表示 7 天窗口
 - `exclude_paths` 优先级高于 `rules`
 - 不命中任何规则的请求，不做配额检查，直接转发
 - 不同规则会使用不同 Redis key，相互隔离计数
@@ -166,6 +170,7 @@ GET /__admin/quota?identity=xxx&rule=chat-daily
   "identity": "X-User-Id:user123",
   "rule": "chat-daily",
   "window": "day",
+  "window_count": 1,
   "period_key": "2026-03-18",
   "success_count": 1,
   "pending_count": 0,
@@ -195,6 +200,7 @@ GET /__admin/quota?identity=xxx
       "limit": 2,
       "remaining": 1,
       "window": "day",
+      "window_count": 1,
       "period_key": "2026-03-18"
     },
     {
@@ -204,6 +210,7 @@ GET /__admin/quota?identity=xxx
       "limit": 20,
       "remaining": 20,
       "window": "hour",
+      "window_count": 1,
       "period_key": "2026-03-18-19"
     }
   ],
@@ -341,9 +348,10 @@ quota_exceeded_body: '{"code":42901,"message":"当前访问过于频繁"}'
 
 Redis key 会在当前时间窗口结束时自动过期：
 
-- `window: minute`：到下一分钟边界过期
-- `window: hour`：到下一小时边界过期
-- `window: day`：到次日 00:00 过期
+- `window_count: 1` 时，行为与当前 `minute` / `hour` / `day` 一致
+- `window: minute`：每 `window_count` 分钟一个窗口，到下一个窗口边界过期
+- `window: hour`：每 `window_count` 小时一个窗口，到下一个窗口边界过期
+- `window: day`：每 `window_count` 天一个窗口，到下一个窗口边界过期
 
 ## 日志
 
