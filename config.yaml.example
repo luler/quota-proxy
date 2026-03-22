@@ -62,12 +62,23 @@ quota:
       # 可选：请求内容检测，默认不配置则不生效
       # 只有 include_paths 命中后，下面条件才会继续参与匹配
       request_match:
-        # 检测 query + form 参数值中是否包含指定字符串
-        query_form_contains: ""
-        # 检测 JSON 请求体文本中是否包含指定字符串
-        json_body_contains: "coder-model-aiproxy"
-        # 检测任意请求头值中是否包含指定字符串
-        header_contains: ""
+        # query + form 会被规范化为类似 a=1&b=2 的字符串，再做 regex 匹配
+        # include 非空时要求至少命中一个；exclude 任一命中都会失败，可理解为 exclude 优先级更高
+        query_form:
+          include:
+            - "(^|&)foo=bar(&|$)"
+          exclude:
+            - "(^|&)debug=true(&|$)"
+        # JSON 请求体会被规范化为紧凑 JSON 文本，再做 regex 匹配
+        # include/exclude 语义同上：即使 include 命中，只要命中 exclude 仍然失败
+        json_body:
+          include:
+            - '"model":"coder-model-aiproxy"'
+        # 请求头会被规范化为按行拼接的 name:value 文本，再做 regex 匹配
+        # 适合精确匹配某一行 header，也支持用 exclude 排除特定头组合
+        headers:
+          include:
+            - "(^|\\n)x-user-id:vip-user($|\\n)"
       # 可选：配额超限后的自定义返回内容；不配置则使用默认 JSON
       # 设置为普通文本时返回纯文本
       # 设置为空字符串时返回 429 且不返回任何内容

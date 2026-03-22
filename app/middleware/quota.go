@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"gin_base/app/config"
 	"gin_base/app/helper/log_helper"
 	"gin_base/app/identity"
@@ -11,12 +12,20 @@ import (
 	"gin_base/app/success"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+type compiledRegexMatcher struct {
+	include []*regexp.Regexp
+	exclude []*regexp.Regexp
+}
 
 // QuotaMiddleware 配额中间件
 type QuotaMiddleware struct {
@@ -25,6 +34,13 @@ type QuotaMiddleware struct {
 	manager    *quota.Manager
 	proxy      *proxy.ReverseProxy
 	config     *config.Config
+	matchers   map[string]compiledRuleMatcher
+}
+
+type compiledRuleMatcher struct {
+	queryForm *compiledRegexMatcher
+	jsonBody  *compiledRegexMatcher
+	headers   *compiledRegexMatcher
 }
 
 // NewQuotaMiddleware 创建配额中间件
@@ -39,6 +55,10 @@ func NewQuotaMiddleware(cfg *config.Config) (*QuotaMiddleware, error) {
 	if err != nil {
 		return nil, err
 	}
+	matchers, err := compileRuleMatchers(cfg.Quota.Rules)
+	if err != nil {
+		return nil, err
+	}
 
 	return &QuotaMiddleware{
 		identifier: identifier,
@@ -46,6 +66,7 @@ func NewQuotaMiddleware(cfg *config.Config) (*QuotaMiddleware, error) {
 		manager:    manager,
 		proxy:      p,
 		config:     cfg,
+		matchers:   matchers,
 	}, nil
 }
 
@@ -297,91 +318,37 @@ func (m *QuotaMiddleware) matchRule(c *gin.Context) *config.QuotaRuleConfig {
 }
 
 func (m *QuotaMiddleware) matchRequest(rule *config.QuotaRuleConfig, c *gin.Context) bool {
-	matcher := rule.RequestMatch
-	if matcher.QueryFormContains == "" && matcher.JSONBodyContains == "" && matcher.HeaderContains == "" {
+	matcher := m.matchers[rule.Name]
+	if matcher.queryForm == nil && matcher.jsonBody == nil && matcher.headers == nil {
 		return true
 	}
 
-	if matcher.QueryFormContains != "" && !m.matchQueryAndFormContains(c, matcher.QueryFormContains) {
-		return false
+	if matcher.queryForm != nil {
+		canonical, err := m.canonicalizeQueryForm(c)
+		if err != nil || !matchRegexDomain(canonical, matcher.queryForm) {
+			return false
+		}
 	}
 
-	if matcher.JSONBodyContains != "" && !m.matchJSONBodyContains(c, matcher.JSONBodyContains) {
-		return false
+	if matcher.jsonBody != nil {
+		canonical, err := m.canonicalizeJSONBody(c)
+		if err != nil || !matchRegexDomain(canonical, matcher.jsonBody) {
+			return false
+		}
 	}
 
-	if matcher.HeaderContains != "" && !m.matchHeaderContains(c, matcher.HeaderContains) {
-		return false
+	if matcher.headers != nil {
+		canonical := m.canonicalizeHeaders(c)
+		if !matchRegexDomain(canonical, matcher.headers) {
+			return false
+		}
 	}
 
 	return true
 }
 
-func (m *QuotaMiddleware) matchQueryAndFormContains(c *gin.Context, target string) bool {
-	for _, values := range c.Request.URL.Query() {
-		if containsAny(values, target) {
-			return true
-		}
-	}
-
-	body, err := m.readRequestBody(c)
-	if err != nil {
-		return false
-	}
-
-	if len(body) == 0 {
-		return false
-	}
-
-	contentType := strings.ToLower(c.GetHeader("Content-Type"))
-	if !(strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")) {
-		return false
-	}
-
-	if err := c.Request.ParseForm(); err != nil {
-		return false
-	}
-	defer func() {
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
-	}()
-
-	for key, values := range c.Request.PostForm {
-		if _, exists := c.Request.URL.Query()[key]; exists {
-			continue
-		}
-		if containsAny(values, target) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (m *QuotaMiddleware) matchJSONBodyContains(c *gin.Context, target string) bool {
-	body, err := m.readRequestBody(c)
-	if err != nil || len(body) == 0 {
-		return false
-	}
-
-	contentType := strings.ToLower(c.GetHeader("Content-Type"))
-	if contentType != "" && !strings.Contains(contentType, "application/json") {
-		return false
-	}
-
-	return strings.Contains(string(body), target)
-}
-
-func (m *QuotaMiddleware) matchHeaderContains(c *gin.Context, target string) bool {
-	for _, values := range c.Request.Header {
-		if containsAny(values, target) {
-			return true
-		}
-	}
-	return false
-}
-
 func (m *QuotaMiddleware) readRequestBody(c *gin.Context) ([]byte, error) {
-	if c.Request.Body == nil {
+	if c == nil || c.Request == nil || c.Request.Body == nil {
 		return nil, nil
 	}
 
@@ -394,13 +361,167 @@ func (m *QuotaMiddleware) readRequestBody(c *gin.Context) ([]byte, error) {
 	return body, nil
 }
 
-func containsAny(values []string, target string) bool {
-	for _, value := range values {
-		if strings.Contains(value, target) {
-			return true
+func (m *QuotaMiddleware) canonicalizeQueryForm(c *gin.Context) (string, error) {
+	values := url.Values{}
+	for key, vals := range c.Request.URL.Query() {
+		for _, value := range vals {
+			values.Add(key, value)
 		}
 	}
-	return false
+
+	body, err := m.readRequestBody(c)
+	if err != nil {
+		return "", err
+	}
+
+	contentType := strings.ToLower(c.GetHeader("Content-Type"))
+	if len(body) > 0 && (strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")) {
+		if err := c.Request.ParseMultipartForm(32 << 20); err != nil && err != http.ErrNotMultipart {
+			if err := c.Request.ParseForm(); err != nil {
+				return "", err
+			}
+		}
+		defer func() {
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+		}()
+
+		for key, vals := range c.Request.PostForm {
+			for _, value := range vals {
+				values.Add(key, value)
+			}
+		}
+	}
+
+	return values.Encode(), nil
+}
+
+func (m *QuotaMiddleware) canonicalizeJSONBody(c *gin.Context) (string, error) {
+	body, err := m.readRequestBody(c)
+	if err != nil {
+		return "", err
+	}
+	if len(body) == 0 {
+		return "", nil
+	}
+
+	contentType := strings.ToLower(c.GetHeader("Content-Type"))
+	if contentType != "" && !strings.Contains(contentType, "application/json") {
+		return "", nil
+	}
+
+	var payload interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", nil
+	}
+
+	canonical, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	return string(canonical), nil
+}
+
+func (m *QuotaMiddleware) canonicalizeHeaders(c *gin.Context) string {
+	lines := make([]string, 0)
+	for name, vals := range c.Request.Header {
+		lowerName := strings.ToLower(name)
+		sortedVals := append([]string(nil), vals...)
+		sort.Strings(sortedVals)
+		for _, value := range sortedVals {
+			lines = append(lines, lowerName+":"+strings.TrimSpace(value))
+		}
+	}
+	sort.Strings(lines)
+	return strings.Join(lines, "\n")
+}
+
+func matchRegexDomain(canonical string, matcher *compiledRegexMatcher) bool {
+	if matcher == nil {
+		return true
+	}
+
+	if len(matcher.include) > 0 {
+		matched := false
+		for _, re := range matcher.include {
+			if re.MatchString(canonical) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	// exclude 具有最终否决权：即使已经命中 include，只要命中任一 exclude 仍然失败。
+	for _, re := range matcher.exclude {
+		if re.MatchString(canonical) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func compileRuleMatchers(rules []config.QuotaRuleConfig) (map[string]compiledRuleMatcher, error) {
+	matchers := make(map[string]compiledRuleMatcher, len(rules))
+	for _, rule := range rules {
+		matcher, err := compileRequestMatcher(&rule.RequestMatch)
+		if err != nil {
+			return nil, fmt.Errorf("compile matcher for rule %s: %w", rule.Name, err)
+		}
+		matchers[rule.Name] = matcher
+	}
+	return matchers, nil
+}
+
+func compileRequestMatcher(cfg *config.QuotaRuleRequestMatchConfig) (compiledRuleMatcher, error) {
+	if cfg == nil {
+		return compiledRuleMatcher{}, nil
+	}
+
+	queryForm, err := compileRegexMatcher(cfg.QueryForm)
+	if err != nil {
+		return compiledRuleMatcher{}, err
+	}
+	jsonBody, err := compileRegexMatcher(cfg.JSONBody)
+	if err != nil {
+		return compiledRuleMatcher{}, err
+	}
+	headers, err := compileRegexMatcher(cfg.Headers)
+	if err != nil {
+		return compiledRuleMatcher{}, err
+	}
+
+	return compiledRuleMatcher{
+		queryForm: queryForm,
+		jsonBody:  jsonBody,
+		headers:   headers,
+	}, nil
+}
+
+func compileRegexMatcher(cfg *config.RequestRegexMatchConfig) (*compiledRegexMatcher, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+
+	matcher := &compiledRegexMatcher{}
+	for _, pattern := range cfg.Include {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, err
+		}
+		matcher.include = append(matcher.include, re)
+	}
+	for _, pattern := range cfg.Exclude {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, err
+		}
+		matcher.exclude = append(matcher.exclude, re)
+	}
+	return matcher, nil
 }
 
 func (m *QuotaMiddleware) matchPath(path, pattern string) bool {

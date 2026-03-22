@@ -93,9 +93,17 @@ quota:
       include_paths:
         - /api/core/chat/**
       request_match:
-        query_form_contains: ""
-        json_body_contains: coder-model-aiproxy
-        header_contains: ""
+        query_form:
+          include:
+            - "(^|&)foo=bar(&|$)"
+          exclude:
+            - "(^|&)debug=true(&|$)"
+        json_body:
+          include:
+            - '"model":"coder-model-aiproxy"'
+        headers:
+          include:
+            - "(^|\\n)x-user-id:vip-user($|\\n)"
       quota_exceeded_body: 请求过于频繁，请稍后再试
 
     - name: other-api-hourly
@@ -117,10 +125,35 @@ quota:
 - 不命中任何规则的请求，不做配额检查，直接转发
 - 不同规则会使用不同 Redis key，相互隔离计数
 - `include_paths` 命中后，若配置了 `request_match`，则继续按请求内容做 AND 匹配
-- `query_form_contains`：检测 query 参数和 form 参数值是否包含指定字符串
-- `json_body_contains`：检测 JSON 请求体文本是否包含指定字符串
-- `header_contains`：检测任意请求头值是否包含指定字符串
-- `request_match` 的字段留空时，不参与匹配
+- `request_match.query_form`：先把 query 参数和 form 参数规范化为类似 `a=1&b=2` 的字符串，再用 regex 做 include/exclude 匹配
+- `request_match.json_body`：先把 JSON 请求体规范化为紧凑 JSON 字符串，再用 regex 做 include/exclude 匹配
+- `request_match.headers`：先把请求头规范化为按行拼接的 `name:value` 文本，再用 regex 做 include/exclude 匹配
+- 每个域内：`include` 非空时要求至少命中一个 regex；`exclude` 任一命中则该域失败
+- 优先级上可理解为：`exclude` 高于 `include`，即使已经命中 `include`，只要再命中任一 `exclude`，最终仍然失败
+- `request_match` 只支持新的 `query_form/json_body/headers + include/exclude` 结构
+
+### request_match 示例
+
+```yaml
+request_match:
+  query_form:
+    include:
+      - '(^|&)foo=bar(&|$)'
+    exclude:
+      - '(^|&)debug=true(&|$)'
+  json_body:
+    include:
+      - '"model":"coder-model-aiproxy"'
+  headers:
+    include:
+      - '(^|\n)x-user-id:vip-user($|\n)'
+```
+
+常见写法：
+
+- 模糊匹配某个 query/form 片段：`foo`
+- 精确匹配参数对：`(^|&)foo=bar(&|$)`
+- 精确匹配 header 行：`(^|\n)x-user-id:vip-user($|\n)`
 
 ### 配额超限自定义返回
 

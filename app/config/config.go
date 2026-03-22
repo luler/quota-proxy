@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -55,11 +56,17 @@ type QuotaConfig struct {
 	Rules        []QuotaRuleConfig `mapstructure:"rules"`
 }
 
+// RequestRegexMatchConfig 正则匹配配置
+type RequestRegexMatchConfig struct {
+	Include []string `mapstructure:"include"`
+	Exclude []string `mapstructure:"exclude"`
+}
+
 // QuotaRuleRequestMatchConfig 请求内容匹配配置
 type QuotaRuleRequestMatchConfig struct {
-	QueryFormContains string `mapstructure:"query_form_contains"`
-	JSONBodyContains  string `mapstructure:"json_body_contains"`
-	HeaderContains    string `mapstructure:"header_contains"`
+	QueryForm *RequestRegexMatchConfig `mapstructure:"query_form"`
+	JSONBody  *RequestRegexMatchConfig `mapstructure:"json_body"`
+	Headers   *RequestRegexMatchConfig `mapstructure:"headers"`
 }
 
 // QuotaRuleConfig 路径配额规则
@@ -140,6 +147,52 @@ func validateQuotaRules(cfg *Config) error {
 
 		if rule.WindowCount < 1 {
 			return fmt.Errorf("invalid quota.rules[%s].window_count: %d, must be >= 1", rule.Name, rule.WindowCount)
+		}
+
+		if err := validateRequestMatchRule(rule.Name, &rule.RequestMatch); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateRequestMatchRule(ruleName string, matcher *QuotaRuleRequestMatchConfig) error {
+	if matcher == nil {
+		return nil
+	}
+
+	if err := validateRegexMatcher(ruleName, "query_form", matcher.QueryForm); err != nil {
+		return err
+	}
+	if err := validateRegexMatcher(ruleName, "json_body", matcher.JSONBody); err != nil {
+		return err
+	}
+	if err := validateRegexMatcher(ruleName, "headers", matcher.Headers); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateRegexMatcher(ruleName, fieldName string, matcher *RequestRegexMatchConfig) error {
+	if matcher == nil {
+		return nil
+	}
+
+	if len(matcher.Include) == 0 && len(matcher.Exclude) == 0 {
+		return fmt.Errorf("invalid quota.rules[%s].request_match.%s: include/exclude cannot both be empty", ruleName, fieldName)
+	}
+
+	for i, pattern := range matcher.Include {
+		if _, err := regexp.Compile(pattern); err != nil {
+			return fmt.Errorf("invalid quota.rules[%s].request_match.%s.include[%d]: %w", ruleName, fieldName, i, err)
+		}
+	}
+
+	for i, pattern := range matcher.Exclude {
+		if _, err := regexp.Compile(pattern); err != nil {
+			return fmt.Errorf("invalid quota.rules[%s].request_match.%s.exclude[%d]: %w", ruleName, fieldName, i, err)
 		}
 	}
 
