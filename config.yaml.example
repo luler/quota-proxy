@@ -18,13 +18,19 @@ redis:
 
 # 访问主体识别配置
 identity:
-  # 当前按请求头优先级识别访问主体
+  # 当前按 extractors 的顺序识别访问主体
   strategy: header_priority
-  # 按顺序检查这些请求头，命中的第一个非空值会作为 identity
-  # 最终 identity 格式类似：X-User-Id:user123
-  headers:
-    - X-User-Id
-  # 当前面配置的请求头都不存在时，是否回退为客户端 IP（例如 ip:127.0.0.1）
+  # 支持两种写法：
+  # 1) 直接取整个 header 值：只配 header + name
+  # 2) 从 header 值中用 regex 提取指定分组：配 header + regex + group + name
+  extractors:
+    - header: Cookie
+      regex: '(^|;\s*)member_id=([^;]+)'
+      group: 2
+      name: member_id
+    - header: X-User-Id
+      name: X-User-Id
+  # 当前面配置的 extractors 都未命中时，是否回退为客户端 IP（例如 ip:127.0.0.1）
   fallback_to_ip: true
 
 # 配额配置

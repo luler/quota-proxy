@@ -7,7 +7,7 @@
 - **路径分规则限流**：支持不同路径配置不同时间窗口和成功次数上限
 - **请求内容匹配**：支持按 Query/Form、JSON Body、请求头内容进行包含匹配
 - **并发安全**：通过 Redis Lua 脚本保证并发场景下不会超发
-- **灵活的身份识别**：支持 Header 优先级识别 + IP 回退
+- **灵活的身份识别**：支持按 `identity.extractors` 顺序提取身份，并支持 IP 回退
 - **多种成功判定**：支持 HTTP 状态码或 JSON 字段判定
 - **SSE 支持**：支持流式响应转发，并在首个有效事件后确认成功计次
 - **自定义超限响应**：支持默认 JSON、纯文本、空响应体、JSON 文本响应
@@ -73,8 +73,13 @@ redis:
 # 访问主体识别配置
 identity:
   strategy: header_priority
-  headers:
-    - X-User-Id
+  extractors:
+    - header: Cookie
+      regex: '(^|;\\s*)member_id=([^;]+)'
+      group: 2
+      name: member_id
+    - header: X-User-Id
+      name: X-User-Id
   fallback_to_ip: true
 
 # 配额配置
@@ -114,6 +119,14 @@ quota:
         - /api/other/**
       quota_exceeded_body: ""
 ```
+
+### identity.extractors 说明
+
+- 按 `extractors` 配置顺序依次尝试，命中第一个后立即作为 identity
+- 直接提取整个请求头：配置 `header + name`
+- 从请求头值中按 regex 提取：配置 `header + regex + group + name`
+- 提取后的 identity 格式保持为 `type:value`，例如 `member_id:abc123`、`X-User-Id:user123`
+- 所有 extractor 都未命中时，若 `fallback_to_ip: true`，则回退为 `ip:<client-ip>`
 
 ### 路径规则说明
 

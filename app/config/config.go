@@ -40,11 +40,19 @@ type RedisConfig struct {
 	DB       int    `mapstructure:"db"`
 }
 
+// IdentityExtractorConfig 请求头提取身份配置
+type IdentityExtractorConfig struct {
+	Header string `mapstructure:"header"`
+	Regex  string `mapstructure:"regex"`
+	Group  int    `mapstructure:"group"`
+	Name   string `mapstructure:"name"`
+}
+
 // IdentityConfig 身份识别配置
 type IdentityConfig struct {
-	Strategy     string   `mapstructure:"strategy"`
-	Headers      []string `mapstructure:"headers"`
-	FallbackToIP bool     `mapstructure:"fallback_to_ip"`
+	Strategy     string                    `mapstructure:"strategy"`
+	Extractors   []IdentityExtractorConfig `mapstructure:"extractors"`
+	FallbackToIP bool                      `mapstructure:"fallback_to_ip"`
 }
 
 // QuotaConfig 配额配置
@@ -129,12 +137,46 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	if err := validateIdentityConfig(&cfg); err != nil {
+		return nil, err
+	}
+
 	if err := validateQuotaRules(&cfg); err != nil {
 		return nil, err
 	}
 
 	appConfig = &cfg
 	return &cfg, nil
+}
+
+func validateIdentityConfig(cfg *Config) error {
+	for i, extractor := range cfg.Identity.Extractors {
+		if extractor.Header == "" {
+			return fmt.Errorf("invalid identity.extractors[%d].header: cannot be empty", i)
+		}
+		if extractor.Name == "" {
+			return fmt.Errorf("invalid identity.extractors[%d].name: cannot be empty", i)
+		}
+		if extractor.Group < 0 {
+			return fmt.Errorf("invalid identity.extractors[%d].group: %d, must be >= 0", i, extractor.Group)
+		}
+		if extractor.Regex == "" {
+			if extractor.Group != 0 {
+				return fmt.Errorf("invalid identity.extractors[%d].group: %d, direct extractor cannot set group", i, extractor.Group)
+			}
+			continue
+		}
+
+		re, err := regexp.Compile(extractor.Regex)
+		if err != nil {
+			return fmt.Errorf("invalid identity.extractors[%d].regex: %w", i, err)
+		}
+		if extractor.Group > re.NumSubexp() {
+			return fmt.Errorf("invalid identity.extractors[%d].group: %d, regex has %d capture groups", i, extractor.Group, re.NumSubexp())
+		}
+	}
+
+	return nil
 }
 
 func validateQuotaRules(cfg *Config) error {
@@ -216,7 +258,6 @@ func setDefaults(v *viper.Viper) {
 
 	// Identity
 	v.SetDefault("identity.strategy", "header_priority")
-	v.SetDefault("identity.headers", []string{"X-User-Id"})
 	v.SetDefault("identity.fallback_to_ip", true)
 
 	// Quota
