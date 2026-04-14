@@ -118,3 +118,10 @@ success_rule:
 logging:
   level: info
   access_log: true
+
+# 管理面板配置
+admin:
+  # 默认为空，表示未启用管理鉴权
+  # 设置后，访问 /__admin/ui 以及其他 /__admin 接口需要提供对应的 API Key
+  # 可通过 /__admin/ui?api_key=你的密钥 自动带入登录
+  api_key: ""

@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>quota-proxy 管理面板</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --border: #d8e1ee;
+      --border-strong: #c6d2e3;
+      --text: #172033;
+      --text-soft: #607089;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+      --success-bg: #ecf8ef;
+      --success-text: #166534;
+      --error-bg: #fdecec;
+      --error-text: #b42318;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      --radius: 16px;
+      --radius-sm: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    header {
+      background: linear-gradient(135deg, #162247 0%, #1d2c5b 100%);
+      color: #fff;
+      padding: 26px 24px 22px;
+    }
+
+    .header-inner,
+    main {
+      max-width: 1360px;
+      margin: 0 auto;
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 25px;
+      font-weight: 700;
+    }
+
+    .sub {
+      margin-top: 6px;
+      font-size: 14px;
+      color: rgba(255,255,255,.82);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .auth-status {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.06);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .auth-panel {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    .auth-panel[hidden],
+    .app-shell[hidden] {
+      display: none !important;
+    }
+
+    .auth-stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .auth-error {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--error-bg);
+      color: var(--error-text);
+      border: 1px solid rgba(180, 35, 24, 0.15);
+      font-size: 14px;
+    }
+
+    .auth-error:empty {
+      display: none;
+    }
+
+    main {
+      padding: 20px 16px 16px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .modal-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.54);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+    }
+
+    .modal-mask.show {
+      display: flex;
+    }
+
+    .modal {
+      width: min(920px, 100%);
+      max-height: calc(100vh - 40px);
+      overflow: hidden;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: #fff;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .modal.compact {
+      width: min(520px, 100%);
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 18px 20px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-title-wrap {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .modal-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .modal-sub {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--text-soft);
+      word-break: break-word;
+    }
+
+    .modal-sub:empty {
+      display: none;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 12px 20px 18px;
+      border-top: 1px solid var(--border);
+      background: #fff;
+    }
+
+    .modal-actions:empty {
+      display: none;
+    }
+
+    .modal-body {
+      padding: 14px 20px 20px;
+      overflow: auto;
+    }
+
+    .modal-body pre {
+      min-height: 320px;
+      border-radius: 14px;
+    }
+
+    .modal-message {
+      margin: 0;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+    }
+
+    .tabbar {
+      display: inline-flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 6px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: #fff;
+      box-shadow: var(--shadow);
+      width: fit-content;
+      max-width: 100%;
+    }
+
+    .tab {
+      border: none;
+      background: transparent;
+      color: var(--text-soft);
+      font-weight: 700;
+      padding: 11px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .tab:hover {
+      background: #eef3ff;
+      color: #1e40af;
+    }
+
+    .tab.active {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.2);
+    }
+
+    .tab-panel {
+      display: none;
+      gap: 16px;
+    }
+
+    .tab-panel.active {
+      display: grid;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .section-desc {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--text-soft);
+    }
+
+    .section-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef3ff;
+      color: #2047b3;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .summary-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .card {
+      background: var(--panel-soft);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      min-height: 102px;
+    }
+
+    .card-label {
+      font-size: 12px;
+      color: var(--text-soft);
+      margin-bottom: 8px;
+    }
+
+    .card-value {
+      font-size: 16px;
+      font-weight: 700;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .toolbar-box {
+      background: var(--panel-soft);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 180px;
+      flex: 1 1 180px;
+    }
+
+    .field.small {
+      flex: 0 0 120px;
+      min-width: 120px;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+
+    input, select, textarea, button {
+      font: inherit;
+      border-radius: 10px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border-strong);
+      background: #fff;
+      color: var(--text);
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    }
+
+    textarea {
+      min-height: 560px;
+      resize: vertical;
+      font-family: Consolas, "Courier New", monospace;
+      line-height: 1.6;
+    }
+
+    button {
+      border: none;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      background: var(--primary);
+      transition: background-color .15s ease, transform .02s ease;
+    }
+
+    button:hover { background: var(--primary-hover); }
+    button:active { transform: translateY(1px); }
+    button.secondary { background: #475569; }
+    button.secondary:hover { background: #334155; }
+    button.danger { background: var(--danger); }
+    button.danger:hover { background: var(--danger-hover); }
+    button.ghost {
+      background: #eef2ff;
+      color: #1e40af;
+      border: 1px solid #c7d2fe;
+    }
+    button.ghost:hover { background: #e0e7ff; }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .table-wrap {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: auto;
+      background: #fff;
+    }
+
+    .table-wrap.loading table {
+      opacity: .45;
+    }
+
+    .table-loading {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(255,255,255,.72);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 2;
+      backdrop-filter: blur(1px);
+    }
+
+    .table-loading.show {
+      display: flex;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 980px;
+    }
+
+    thead { background: #f8fafc; }
+
+    th, td {
+      text-align: left;
+      padding: 12px 10px;
+      border-bottom: 1px solid #e9eef5;
+      vertical-align: top;
+    }
+
+    th.num, td.num {
+      text-align: right;
+      white-space: nowrap;
+      width: 90px;
+    }
+
+    th.short, td.short {
+      white-space: nowrap;
+      width: 120px;
+    }
+
+    th.action-col, td.action-col {
+      white-space: nowrap;
+      width: 148px;
+    }
+
+    td.action-col .actions {
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+      gap: 6px;
+    }
+
+    td.action-col .actions button {
+      min-width: 64px;
+      padding: 7px 10px;
+      font-size: 13px;
+    }
+
+    tbody tr:hover { background: #fafcff; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid #dbeafe;
+      border-top-color: var(--primary);
+      animation: spin .8s linear infinite;
+      flex: 0 0 auto;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .mono {
+      font-family: Consolas, "Courier New", monospace;
+      background: #f3f6fb;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 2px 6px;
+      word-break: break-all;
+    }
+
+    .helper {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px dashed var(--border-strong);
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .detail-stack,
+    .config-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    pre {
+      margin: 0;
+      padding: 16px;
+      color: #e2e8f0;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      overflow: auto;
+      min-height: 220px;
+      font-family: Consolas, "Courier New", monospace;
+      line-height: 1.6;
+    }
+
+    .editor-wrap {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .editor-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      background: var(--panel-soft);
+      border-bottom: 1px solid var(--border);
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .editor-head strong {
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .editor-wrap textarea {
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .editor-wrap textarea:focus {
+      box-shadow: none;
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--text-soft);
+      padding: 28px 16px;
+    }
+
+    @media (max-width: 900px) {
+      header {
+        padding: 22px 16px 18px;
+      }
+
+      .header-inner {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      main {
+        padding: 16px 12px 12px;
+      }
+
+      section {
+        padding: 16px;
+      }
+
+      .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .field,
+      .field.small,
+      .actions,
+      .tabbar,
+      .tab {
+        width: 100%;
+      }
+
+      .detail-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .actions button,
+      .tab {
+        width: 100%;
+      }
+
+      .editor-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div>
+      <h1>quota-proxy 管理面板</h1>
+    </div>
+    <div class="header-actions">
+      <div id="authStatus" class="auth-status">未授权</div>
+      <button id="logoutBtn" class="ghost" type="button" onclick="logout()" hidden>退出登录</button>
+    </div>
+  </div>
+</header>
+<main>
+  <section id="authPanel" class="auth-panel" hidden>
+    <div class="section-head">
+      <div>
+        <div class="section-tag">授权访问</div>
+        <h2 class="section-title">请输入管理密钥</h2>
+        <div class="section-desc">支持从 URL 参数 api_key 自动带入，也会在本地浏览器中记住最近一次成功使用的密钥。</div>
+      </div>
+    </div>
+    <div class="auth-stack">
+      <div class="field">
+        <label for="authCodeInput">管理密钥</label>
+        <input id="authCodeInput" type="password" placeholder="请输入 API Key" autocomplete="off" />
+      </div>
+      <div id="authError" class="auth-error"></div>
+      <div class="actions">
+        <button id="loginBtn" type="button" onclick="doAuth()">登录</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell" hidden>
+  <div class="tabbar" role="tablist" aria-label="管理面板主导航">
+    <button id="tab-overview" class="tab active" type="button" onclick="switchTab('overview')">概览与额度</button>
+    <button id="tab-config" class="tab" type="button" onclick="switchTab('config')">配置编辑</button>
+  </div>
+
+  <div id="panel-overview" class="tab-panel active">
+    <section>
+      <div class="section-head">
+        <div>
+          <div class="section-tag">系统概览</div>
+          <h2 class="section-title">当前运行信息</h2>
+        </div>
+        <button class="ghost" onclick="boot(true)">刷新全部</button>
+      </div>
+      <div id="summary" class="summary-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <div class="section-tag">活跃额度</div>
+          <h2 class="section-title">当前窗口列表</h2>
+        </div>
+      </div>
+
+      <div class="toolbar-box">
+        <div class="toolbar">
+          <div class="field">
+            <label for="identityFilter">按标识筛选</label>
+            <input id="identityFilter" placeholder="例如：ip:127.0.0.1 或 user:alice" />
+          </div>
+          <div class="field">
+            <label for="ruleFilter">规则</label>
+            <select id="ruleFilter"></select>
+          </div>
+          <div class="field small">
+            <label for="pageSize">每页条数</label>
+            <input id="pageSize" type="number" min="1" max="200" value="20" />
+          </div>
+          <div class="actions">
+            <button onclick="loadQuotas(true)">查询</button>
+            <button class="secondary" onclick="toggleAutoRefresh()" id="autoRefreshBtn">自动刷新：关闭</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="meta-row">
+        <div id="quotaMeta">尚未加载额度数据</div>
+        <div id="quotaRuleHint">当前筛选规则：全部</div>
+      </div>
+
+      <div class="table-wrap">
+        <div id="quotaTableLoading" class="table-loading">
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="quotaTableLoadingText">正在加载额度列表...</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>标识</th>
+              <th class="short">类型</th>
+              <th>规则</th>
+              <th class="num">成功次数</th>
+              <th class="num">待确认</th>
+              <th class="num">剩余额度</th>
+              <th class="short">窗口</th>
+              <th>周期键</th>
+              <th class="action-col">操作</th>
+            </tr>
+          </thead>
+          <tbody id="quotaRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div id="panel-config" class="tab-panel">
+    <section>
+      <div class="section-head">
+        <div>
+          <div class="section-tag">配置编辑</div>
+          <h2 class="section-title">配置查看与编辑</h2>
+        </div>
+      </div>
+
+      <div class="config-stack">
+        <div class="toolbar-box">
+          <div class="actions">
+            <button onclick="saveConfigPayload()">保存配置</button>
+            <button class="ghost" onclick="formatConfigEditor()">格式化 JSON</button>
+          </div>
+        </div>
+
+        <div class="editor-wrap">
+          <div class="editor-head">
+            <strong>当前配置</strong>
+          </div>
+          <textarea id="configEditor" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </section>
+  </div>
+  </div>
+</main>
+<div id="appModal" class="modal-mask" onclick="handleModalMaskClick(event)">
+  <div id="appModalDialog" class="modal compact" role="dialog" aria-modal="true" aria-labelledby="appModalTitle">
+    <div class="modal-head">
+      <div class="modal-title-wrap">
+        <h3 id="appModalTitle" class="modal-title">提示</h3>
+        <div id="appModalSub" class="modal-sub"></div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div id="appModalBody"></div>
+    </div>
+    <div id="appModalActions" class="modal-actions"></div>
+  </div>
+</div>
+<script>
+let autoRefreshTimer = null;
+let autoRefreshCountdown = null;
+let autoRefreshRemaining = 10;
+let activeTab = 'overview';
+let selectedQuota = null;
+let modalState = { onConfirm: null };
+let configLoaded = false;
+let authCode = '';
+let isAuthed = false;
+let authLoading = false;
+const authStorageKey = 'quota_proxy_admin_api_key';
+
+function escapeHTML(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getAutoRefreshButtonText() {
+  return autoRefreshTimer ? `自动刷新：${autoRefreshRemaining} 秒` : '自动刷新：关闭';
+}
+
+function renderAutoRefreshButton() {
+  const btn = document.getElementById('autoRefreshBtn');
+  if (btn) {
+    btn.textContent = getAutoRefreshButtonText();
+  }
+}
+
+function setAuthError(message = '') {
+  const el = document.getElementById('authError');
+  if (el) {
+    el.textContent = message;
+  }
+}
+
+function syncAuthInput() {
+  const input = document.getElementById('authCodeInput');
+  if (input && input.value !== authCode) {
+    input.value = authCode;
+  }
+}
+
+function setAuthLoading(loading) {
+  authLoading = loading;
+  const loginBtn = document.getElementById('loginBtn');
+  const input = document.getElementById('authCodeInput');
+  if (loginBtn) {
+    loginBtn.disabled = loading;
+    loginBtn.textContent = loading ? '验证中...' : '登录';
+  }
+  if (input) {
+    input.disabled = loading;
+  }
+}
+
+function updateAuthUI() {
+  const authPanel = document.getElementById('authPanel');
+  const appShell = document.getElementById('appShell');
+  const authStatus = document.getElementById('authStatus');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const tabOverview = document.getElementById('tab-overview');
+  const tabConfig = document.getElementById('tab-config');
+  const panelOverview = document.getElementById('panel-overview');
+  const panelConfig = document.getElementById('panel-config');
+  if (authPanel) {
+    authPanel.hidden = isAuthed;
+  }
+  if (appShell) {
+    appShell.hidden = !isAuthed;
+  }
+  if (authStatus) {
+    authStatus.textContent = isAuthed ? '已授权' : '未授权';
+  }
+  if (logoutBtn) {
+    logoutBtn.hidden = !isAuthed;
+  }
+  if (tabOverview) {
+    tabOverview.classList.toggle('active', activeTab === 'overview');
+  }
+  if (tabConfig) {
+    tabConfig.classList.toggle('active', activeTab === 'config');
+  }
+  if (panelOverview) {
+    panelOverview.classList.toggle('active', activeTab === 'overview');
+  }
+  if (panelConfig) {
+    panelConfig.classList.toggle('active', activeTab === 'config');
+  }
+  syncAuthInput();
+  renderAutoRefreshButton();
+}
+
+function stopAutoRefreshSilently() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+  stopAutoRefreshCountdown();
+}
+
+function clearSensitiveState() {
+  stopAutoRefreshSilently();
+  clearDetailSelection();
+  configLoaded = false;
+  const summary = document.getElementById('summary');
+  const quotaRows = document.getElementById('quotaRows');
+  const quotaMeta = document.getElementById('quotaMeta');
+  const quotaRuleHint = document.getElementById('quotaRuleHint');
+  const ruleFilter = document.getElementById('ruleFilter');
+  const configEditor = document.getElementById('configEditor');
+  if (summary) summary.innerHTML = '';
+  if (quotaRows) quotaRows.innerHTML = '';
+  if (quotaMeta) quotaMeta.textContent = '尚未加载额度数据';
+  if (quotaRuleHint) quotaRuleHint.textContent = '当前筛选规则：全部';
+  if (ruleFilter) ruleFilter.innerHTML = '<option value="">全部规则</option>';
+  if (configEditor) configEditor.value = '';
+}
+
+function clearAuthState({ preserveInput = false } = {}) {
+  stopAutoRefreshSilently();
+  isAuthed = false;
+  if (!preserveInput) {
+    authCode = '';
+  }
+  localStorage.removeItem(authStorageKey);
+  clearSensitiveState();
+  updateAuthUI();
+}
+
+function handleUnauthorized(message = '登录已失效，请重新输入管理密钥。') {
+  clearStatus();
+  clearAuthState({ preserveInput: true });
+  setAuthError(message);
+}
+
+async function request(url, options = {}) {
+  const { skipUnauthorizedHandler = false, headers: customHeaders = {}, ...fetchOptions } = options;
+  const headers = { 'Content-Type': 'application/json', ...customHeaders };
+  if (authCode) {
+    headers['X-API-Key'] = authCode;
+  }
+  const res = await fetch(url, { ...fetchOptions, headers });
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+  if (res.status === 401) {
+    const message = data.error || data.message || data.raw || '登录已失效，请重新登录。';
+    if (!skipUnauthorizedHandler) {
+      handleUnauthorized(message);
+    }
+    throw new Error(message);
+  }
+  if (!res.ok) throw new Error(data.error || data.message || data.raw || res.statusText);
+  return data;
+}
+
+function startAutoRefreshCountdown() {
+  if (autoRefreshCountdown) {
+    clearInterval(autoRefreshCountdown);
+  }
+  autoRefreshRemaining = 10;
+  renderAutoRefreshButton();
+  autoRefreshCountdown = setInterval(() => {
+    autoRefreshRemaining -= 1;
+    if (autoRefreshRemaining <= 0) {
+      autoRefreshRemaining = 10;
+    }
+    renderAutoRefreshButton();
+  }, 1000);
+}
+
+function stopAutoRefreshCountdown() {
+  if (autoRefreshCountdown) {
+    clearInterval(autoRefreshCountdown);
+    autoRefreshCountdown = null;
+  }
+  autoRefreshRemaining = 10;
+  renderAutoRefreshButton();
+}
+
+function setQuotaTableLoading(loading, text = '正在加载额度列表...') {
+  const wrap = document.querySelector('.table-wrap');
+  const mask = document.getElementById('quotaTableLoading');
+  const label = document.getElementById('quotaTableLoadingText');
+  if (!wrap || !mask || !label) {
+    return;
+  }
+  label.textContent = text;
+  wrap.classList.toggle('loading', loading);
+  mask.classList.toggle('show', loading);
+}
+
+async function withQuotaTableLoading(task, text) {
+  setQuotaTableLoading(true, text);
+  try {
+    return await task();
+  } finally {
+    setQuotaTableLoading(false);
+  }
+}
+
+async function switchTab(tab) {
+  if (!isAuthed) {
+    activeTab = tab === 'config' ? 'config' : 'overview';
+    updateAuthUI();
+    return;
+  }
+
+  activeTab = tab === 'config' ? 'config' : 'overview';
+  const isOverview = activeTab === 'overview';
+  document.getElementById('tab-overview').classList.toggle('active', isOverview);
+  document.getElementById('tab-config').classList.toggle('active', !isOverview);
+  document.getElementById('panel-overview').classList.toggle('active', isOverview);
+  document.getElementById('panel-config').classList.toggle('active', !isOverview);
+
+  if (isOverview) {
+    await loadSummary();
+    await loadQuotas(true, '正在刷新额度列表...');
+    return;
+  }
+
+  if (!configLoaded) {
+    await loadConfig(true);
+  }
+}
+
+async function doAuth() {
+  const input = document.getElementById('authCodeInput');
+  authCode = input ? input.value.trim() : authCode.trim();
+  if (!authCode) {
+    setAuthError('请输入管理密钥');
+    updateAuthUI();
+    return;
+  }
+
+  setAuthError('');
+  setAuthLoading(true);
+  try {
+    const data = await request('/__admin/login', {
+      method: 'POST',
+      headers: { 'X-API-Key': '' },
+      body: JSON.stringify({ api_key: authCode }),
+      skipUnauthorizedHandler: true
+    });
+    isAuthed = true;
+    localStorage.setItem(authStorageKey, authCode);
+    updateAuthUI();
+    await boot(true);
+    if (data.message && data.message !== '验证通过') {
+      setStatus(data.message, true, '登录成功');
+    }
+  } catch (err) {
+    isAuthed = false;
+    setAuthError(err.message || '验证失败');
+    clearSensitiveState();
+    updateAuthUI();
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+function logout() {
+  clearStatus();
+  setAuthError('');
+  clearAuthState();
+}
+
+function escapeAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function closeModal() {
+  modalState.onConfirm = null;
+  document.getElementById('appModal').classList.remove('show');
+}
+
+function handleModalMaskClick(event) {
+  if (event.target && event.target.id === 'appModal') {
+    closeModal();
+  }
+}
+
+function openModal({ title = '提示', subtitle = '', bodyHTML = '', actionsHTML = '', compact = false } = {}) {
+  const mask = document.getElementById('appModal');
+  const dialog = document.getElementById('appModalDialog');
+  document.getElementById('appModalTitle').textContent = title;
+  document.getElementById('appModalSub').textContent = subtitle;
+  document.getElementById('appModalBody').innerHTML = bodyHTML;
+  document.getElementById('appModalActions').innerHTML = actionsHTML;
+  dialog.classList.toggle('compact', compact);
+  mask.classList.add('show');
+}
+
+function showMessageModal(message, ok = true, title = '') {
+  const resolvedTitle = title || (ok ? '操作成功' : '操作失败');
+  openModal({
+    title: resolvedTitle,
+    bodyHTML: `<p class="modal-message">${escapeHTML(message || (ok ? '操作已完成。' : '发生未知错误。'))}</p>`,
+    actionsHTML: '<button type="button" onclick="closeModal()">确定</button>',
+    compact: true
+  });
+}
+
+function showConfirmModal(message, onConfirm, title = '请确认') {
+  modalState.onConfirm = onConfirm;
+  openModal({
+    title,
+    bodyHTML: `<p class="modal-message">${escapeHTML(message)}</p>`,
+    actionsHTML: '<button class="ghost" type="button" onclick="closeModal()">取消</button><button class="danger" type="button" onclick="confirmModalAction()">确认</button>',
+    compact: true
+  });
+}
+
+async function confirmModalAction() {
+  const action = modalState.onConfirm;
+  modalState.onConfirm = null;
+  closeModal();
+  if (typeof action === 'function') {
+    await action();
+  }
+}
+
+function showQuotaDetailModal(detail, identity, rule) {
+  const subtitle = rule ? `标识：${identity} ｜ 规则：${rule}` : `标识：${identity} ｜ 规则：全部`;
+  openModal({
+    title: '额度详情',
+    subtitle,
+    bodyHTML: `<pre>${escapeHTML(JSON.stringify(detail, null, 2))}</pre>`,
+    actionsHTML: '<button class="ghost" type="button" onclick="loadQuotaDetail()">刷新详情</button><button class="danger" type="button" onclick="resetQuota()">重置当前额度</button>',
+    compact: false
+  });
+}
+
+function setStatus(message, ok = true, title = '') {
+  showMessageModal(message, ok, title);
+}
+
+function clearStatus() {
+  closeModal();
+}
+
+function clearDetailSelection() {
+  selectedQuota = null;
+}
+
+function setSelectedQuota(identity, rule = '') {
+  selectedQuota = { identity: identity || '', rule: rule || '' };
+}
+
+function getSelectedQuota() {
+  const identity = selectedQuota?.identity?.trim?.() || '';
+  const rule = selectedQuota?.rule || '';
+  return { identity, rule };
+}
+
+function renderSummary(data) {
+  const summary = document.getElementById('summary');
+  summary.innerHTML = '';
+  const successMode = data.success_rule && data.success_rule.mode ? data.success_rule.mode : '默认';
+  const require2xx = data.success_rule && typeof data.success_rule.require_http_2xx !== 'undefined'
+    ? (data.success_rule.require_http_2xx ? '是' : '否')
+    : '未配置';
+  const cards = [
+    ['配置文件路径', data.config_path || '未获取到'],
+    ['上游地址', data.upstream?.target || '未配置'],
+    ['Redis', `${data.redis?.addr || '-'}\nDB：${data.redis?.db ?? '-'}`],
+    ['配额状态', `${data.quota?.enabled ? '已启用' : '已关闭'}\n时区：${data.quota?.timezone || '-'}`],
+    ['Fail Open', data.quota?.fail_open ? '开启' : '关闭'],
+    ['身份识别', `${data.identity?.strategy || '-'}\n回退到 IP：${data.identity?.fallback_to_ip ? '是' : '否'}`],
+    ['规则数量', String((data.quota?.rules || []).length)],
+    ['成功判定', `模式：${successMode}\n要求 HTTP 2xx：${require2xx}`]
+  ];
+
+  for (const [label, value] of cards) {
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.innerHTML = `<div class="card-label">${escapeHTML(label)}</div><div class="card-value">${escapeHTML(value)}</div>`;
+    summary.appendChild(div);
+  }
+
+  const ruleFilter = document.getElementById('ruleFilter');
+  const options = ['<option value="">全部规则</option>']
+    .concat((data.rule_names || []).map(name => `<option value="${escapeAttr(name)}">${escapeHTML(name)}</option>`));
+  ruleFilter.innerHTML = options.join('');
+}
+
+function renderQuotas(data) {
+  document.getElementById('quotaMeta').textContent = `共 ${data.total} 条活跃记录，当前第 ${data.page} 页，每页 ${data.page_size} 条`;
+  document.getElementById('quotaRuleHint').textContent = data.filters?.rule ? `当前筛选规则：${data.filters.rule}` : '当前筛选规则：全部';
+  const tbody = document.getElementById('quotaRows');
+  const items = data.items || [];
+  const hasSelected = items.some(item => item.identity === selectedQuota?.identity && item.rule_name === selectedQuota?.rule);
+  if (!items.length) {
+    clearDetailSelection();
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">当前条件下没有活跃额度记录。</td></tr>';
+    return;
+  }
+  if (!hasSelected && selectedQuota) {
+    clearDetailSelection();
+  }
+
+  tbody.innerHTML = '';
+  for (const item of items) {
+    const isSelected = item.identity === selectedQuota?.identity && item.rule_name === selectedQuota?.rule;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="mono">${escapeHTML(item.identity)}</span></td>
+      <td class="short"><span class="pill">${escapeHTML(item.identity_type)}</span></td>
+      <td>${escapeHTML(item.rule_name)}</td>
+      <td class="num">${escapeHTML(item.success_count)}</td>
+      <td class="num">${escapeHTML(item.pending_count)}</td>
+      <td class="num">${escapeHTML(item.remaining)} / ${escapeHTML(item.limit)}</td>
+      <td class="short">${escapeHTML(item.window)} × ${escapeHTML(item.window_count)}</td>
+      <td><span class="mono">${escapeHTML(item.period_key)}</span></td>
+      <td class="action-col">
+        <div class="actions">
+          <button class="ghost" type="button" onclick='selectQuota(${JSON.stringify(item.identity)}, ${JSON.stringify(item.rule_name)})'>${isSelected ? '已选中' : '查看详情'}</button>
+          <button class="danger" type="button" onclick='resetQuota(${JSON.stringify(item.identity)}, ${JSON.stringify(item.rule_name)})'>重置</button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function selectQuota(identity, rule) {
+  switchTab('overview');
+  setSelectedQuota(identity, rule);
+  loadQuotaDetail();
+}
+
+async function loadSummary() {
+  const data = await request('/__admin/summary');
+  renderSummary(data);
+}
+
+async function loadQuotas(silent = false, loadingText = '正在加载额度列表...') {
+  const identity = encodeURIComponent(document.getElementById('identityFilter').value.trim());
+  const rule = encodeURIComponent(document.getElementById('ruleFilter').value);
+  const pageSize = encodeURIComponent(document.getElementById('pageSize').value || '20');
+  const data = await withQuotaTableLoading(
+    () => request(`/__admin/quotas?identity=${identity}&rule=${rule}&page_size=${pageSize}`),
+    loadingText
+  );
+  renderQuotas(data);
+  if (!silent) {
+    setStatus('活跃额度列表已刷新。', true, '查询完成');
+  }
+}
+
+async function loadQuotaDetail() {
+  switchTab('overview');
+  const { identity, rule } = getSelectedQuota();
+  if (!identity) {
+    setStatus('请先在列表中选择一条要查看的额度记录。', false, '未选择记录');
+    return;
+  }
+  const query = rule
+    ? `identity=${encodeURIComponent(identity)}&rule=${encodeURIComponent(rule)}`
+    : `identity=${encodeURIComponent(identity)}`;
+  const data = await request(`/__admin/quota?${query}`);
+  showQuotaDetailModal(data, identity, rule);
+}
+
+async function resetQuota(identityArg, ruleArg) {
+  switchTab('overview');
+  if (typeof identityArg !== 'undefined') {
+    setSelectedQuota(identityArg, ruleArg || '');
+  }
+  const { identity, rule } = getSelectedQuota();
+  if (!identity) {
+    setStatus('请先在列表中选择一条要重置的额度记录。', false, '未选择记录');
+    return;
+  }
+  const confirmText = rule
+    ? `确认重置标识 ${identity} 在规则 ${rule} 下的额度吗？`
+    : `确认重置标识 ${identity} 在全部规则下的额度吗？`;
+  showConfirmModal(confirmText, async () => {
+    const data = await request('/__admin/quota/reset', {
+      method: 'POST',
+      body: JSON.stringify({ identity, rule })
+    });
+    await loadQuotas(true);
+    showMessageModal(data.message || '额度已重置。', true, '重置成功');
+  }, '确认重置');
+}
+
+async function loadConfig(silent = false) {
+  const data = await request('/__admin/config');
+  document.getElementById('configEditor').value = JSON.stringify(data.config, null, 2);
+  configLoaded = true;
+  if (!silent) {
+    setStatus('已加载当前配置。', true, '配置已加载');
+  }
+}
+
+function configPayload() {
+  return JSON.parse(document.getElementById('configEditor').value || '{}');
+}
+
+function formatConfigEditor() {
+  switchTab('config');
+  try {
+    document.getElementById('configEditor').value = JSON.stringify(configPayload(), null, 2);
+    setStatus('配置 JSON 已格式化。', true, '格式化完成');
+  } catch (err) {
+    setStatus(`JSON 格式不正确：${err.message}`, false, '格式化失败');
+  }
+}
+
+async function validateConfigPayload() {
+  switchTab('config');
+  const data = await request('/__admin/config/validate', {
+    method: 'POST',
+    body: JSON.stringify(configPayload())
+  });
+  setStatus(data.message || '配置校验通过。', true, '校验成功');
+}
+
+async function saveConfigPayload() {
+  switchTab('config');
+  showConfirmModal('确认保存当前配置并立即生效吗？', async () => {
+    const payload = configPayload();
+    await request('/__admin/config/validate', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const data = await request('/__admin/config/save', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    await request('/__admin/config/reload', { method: 'POST' });
+    await boot(true);
+    setStatus(`${data.message || '配置已保存。'}\n文件：${data.config_path || '未知'}`, true, '保存成功');
+  }, '确认保存');
+}
+
+function toggleAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+    stopAutoRefreshCountdown();
+    setStatus('自动刷新已关闭。', true, '设置已更新');
+    return;
+  }
+  startAutoRefreshCountdown();
+  autoRefreshTimer = setInterval(() => {
+    loadQuotas(true, '正在自动刷新额度列表...')
+      .then(() => {
+        autoRefreshRemaining = 10;
+        renderAutoRefreshButton();
+      })
+      .catch(err => setStatus(err.message, false, '自动刷新失败'));
+  }, 10000);
+  renderAutoRefreshButton();
+  setStatus('自动刷新已开启，每 10 秒刷新一次活跃额度。', true, '设置已更新');
+}
+
+async function boot(silent = false) {
+  if (!isAuthed) {
+    clearSensitiveState();
+    updateAuthUI();
+    return;
+  }
+
+  try {
+    if (!silent) clearStatus();
+    clearDetailSelection();
+    await loadSummary();
+    await loadQuotas(true);
+    await loadConfig(true);
+    if (!silent) {
+      await switchTab(activeTab);
+    }
+  } catch (err) {
+    setStatus(err.message, false, '页面加载失败');
+  }
+}
+
+function initializeAuth() {
+  authCode = localStorage.getItem(authStorageKey) || '';
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlAuthCode = urlParams.get('api_key');
+  if (urlAuthCode) {
+    authCode = urlAuthCode.trim();
+  }
+
+  updateAuthUI();
+  if (authCode) {
+    doAuth();
+  }
+}
+
+switchTab('overview');
+renderAutoRefreshButton();
+initializeAuth();
+</script>
+</body>
+</html>

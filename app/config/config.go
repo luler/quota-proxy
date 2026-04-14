@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"regexp"
@@ -8,125 +9,124 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 // Config 应用配置结构
 type Config struct {
-	Server      ServerConfig      `mapstructure:"server"`
-	Upstream    UpstreamConfig    `mapstructure:"upstream"`
-	Redis       RedisConfig       `mapstructure:"redis"`
-	Identity    IdentityConfig    `mapstructure:"identity"`
-	Quota       QuotaConfig       `mapstructure:"quota"`
-	SuccessRule SuccessRuleConfig `mapstructure:"success_rule"`
-	Logging     LoggingConfig     `mapstructure:"logging"`
+	Server      ServerConfig      `mapstructure:"server" yaml:"server" json:"server"`
+	Upstream    UpstreamConfig    `mapstructure:"upstream" yaml:"upstream" json:"upstream"`
+	Redis       RedisConfig       `mapstructure:"redis" yaml:"redis" json:"redis"`
+	Identity    IdentityConfig    `mapstructure:"identity" yaml:"identity" json:"identity"`
+	Quota       QuotaConfig       `mapstructure:"quota" yaml:"quota" json:"quota"`
+	SuccessRule SuccessRuleConfig `mapstructure:"success_rule" yaml:"success_rule" json:"success_rule"`
+	Logging     LoggingConfig     `mapstructure:"logging" yaml:"logging" json:"logging"`
+	Admin       AdminConfig       `mapstructure:"admin" yaml:"admin" json:"admin"`
 }
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Port         int           `mapstructure:"port"`
-	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout time.Duration `mapstructure:"write_timeout"`
+	Port         int           `mapstructure:"port" yaml:"port" json:"port"`
+	ReadTimeout  time.Duration `mapstructure:"read_timeout" yaml:"read_timeout" json:"read_timeout"`
+	WriteTimeout time.Duration `mapstructure:"write_timeout" yaml:"write_timeout" json:"write_timeout"`
 }
 
 // UpstreamConfig 上游服务配置
 type UpstreamConfig struct {
-	Target string `mapstructure:"target"`
+	Target string `mapstructure:"target" yaml:"target" json:"target"`
 }
 
 // RedisConfig Redis 配置
 type RedisConfig struct {
-	Addr     string `mapstructure:"addr"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+	Addr     string `mapstructure:"addr" yaml:"addr" json:"addr"`
+	Password string `mapstructure:"password" yaml:"password" json:"password,omitempty"`
+	DB       int    `mapstructure:"db" yaml:"db" json:"db"`
 }
 
 // IdentityExtractorConfig 请求头提取身份配置
 type IdentityExtractorConfig struct {
-	Header string `mapstructure:"header"`
-	Regex  string `mapstructure:"regex"`
-	Group  int    `mapstructure:"group"`
-	Name   string `mapstructure:"name"`
+	Header string `mapstructure:"header" yaml:"header" json:"header"`
+	Regex  string `mapstructure:"regex" yaml:"regex" json:"regex"`
+	Group  int    `mapstructure:"group" yaml:"group" json:"group"`
+	Name   string `mapstructure:"name" yaml:"name" json:"name"`
 }
 
 // IdentityConfig 身份识别配置
 type IdentityConfig struct {
-	Strategy     string                    `mapstructure:"strategy"`
-	Extractors   []IdentityExtractorConfig `mapstructure:"extractors"`
-	FallbackToIP bool                      `mapstructure:"fallback_to_ip"`
+	Strategy     string                    `mapstructure:"strategy" yaml:"strategy" json:"strategy"`
+	Extractors   []IdentityExtractorConfig `mapstructure:"extractors" yaml:"extractors" json:"extractors"`
+	FallbackToIP bool                      `mapstructure:"fallback_to_ip" yaml:"fallback_to_ip" json:"fallback_to_ip"`
 }
 
 // QuotaConfig 配额配置
 type QuotaConfig struct {
-	Enabled      bool              `mapstructure:"enabled"`
-	Timezone     string            `mapstructure:"timezone"`
-	ExcludePaths []string          `mapstructure:"exclude_paths"`
-	FailOpen     bool              `mapstructure:"fail_open"`
-	Rules        []QuotaRuleConfig `mapstructure:"rules"`
+	Enabled      bool              `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Timezone     string            `mapstructure:"timezone" yaml:"timezone" json:"timezone"`
+	ExcludePaths []string          `mapstructure:"exclude_paths" yaml:"exclude_paths" json:"exclude_paths"`
+	FailOpen     bool              `mapstructure:"fail_open" yaml:"fail_open" json:"fail_open"`
+	Rules        []QuotaRuleConfig `mapstructure:"rules" yaml:"rules" json:"rules"`
 }
 
 // RequestRegexMatchConfig 正则匹配配置
 type RequestRegexMatchConfig struct {
-	Include []string `mapstructure:"include"`
-	Exclude []string `mapstructure:"exclude"`
+	Include []string `mapstructure:"include" yaml:"include" json:"include"`
+	Exclude []string `mapstructure:"exclude" yaml:"exclude" json:"exclude"`
 }
 
 // QuotaRuleRequestMatchConfig 请求内容匹配配置
 type QuotaRuleRequestMatchConfig struct {
-	QueryForm *RequestRegexMatchConfig `mapstructure:"query_form"`
-	JSONBody  *RequestRegexMatchConfig `mapstructure:"json_body"`
-	Headers   *RequestRegexMatchConfig `mapstructure:"headers"`
+	QueryForm *RequestRegexMatchConfig `mapstructure:"query_form" yaml:"query_form" json:"query_form"`
+	JSONBody  *RequestRegexMatchConfig `mapstructure:"json_body" yaml:"json_body" json:"json_body"`
+	Headers   *RequestRegexMatchConfig `mapstructure:"headers" yaml:"headers" json:"headers"`
 }
 
 // QuotaRuleConfig 路径配额规则
 type QuotaRuleConfig struct {
-	Name              string                      `mapstructure:"name"`
-	Window            string                      `mapstructure:"window"`
-	WindowCount       int                         `mapstructure:"window_count"`
-	SuccessLimit      int                         `mapstructure:"success_limit"`
-	IncludePaths      []string                    `mapstructure:"include_paths"`
-	RequestMatch      QuotaRuleRequestMatchConfig `mapstructure:"request_match"`
-	QuotaExceededBody *string                     `mapstructure:"quota_exceeded_body"`
+	Name              string                      `mapstructure:"name" yaml:"name" json:"name"`
+	Window            string                      `mapstructure:"window" yaml:"window" json:"window"`
+	WindowCount       int                         `mapstructure:"window_count" yaml:"window_count" json:"window_count"`
+	SuccessLimit      int                         `mapstructure:"success_limit" yaml:"success_limit" json:"success_limit"`
+	IncludePaths      []string                    `mapstructure:"include_paths" yaml:"include_paths" json:"include_paths"`
+	RequestMatch      QuotaRuleRequestMatchConfig `mapstructure:"request_match" yaml:"request_match" json:"request_match"`
+	QuotaExceededBody *string                     `mapstructure:"quota_exceeded_body" yaml:"quota_exceeded_body" json:"quota_exceeded_body"`
 }
 
 // SuccessRuleConfig 成功判定规则配置
 type SuccessRuleConfig struct {
-	Mode           string `mapstructure:"mode"`
-	RequireHTTP2xx bool   `mapstructure:"require_http_2xx"`
-	JSONField      string `mapstructure:"json_field"`
-	ExpectedValue  int    `mapstructure:"expected_value"`
+	Mode           string `mapstructure:"mode" yaml:"mode" json:"mode"`
+	RequireHTTP2xx bool   `mapstructure:"require_http_2xx" yaml:"require_http_2xx" json:"require_http_2xx"`
+	JSONField      string `mapstructure:"json_field" yaml:"json_field" json:"json_field"`
+	ExpectedValue  int    `mapstructure:"expected_value" yaml:"expected_value" json:"expected_value"`
 }
 
 // LoggingConfig 日志配置
 type LoggingConfig struct {
-	Level     string `mapstructure:"level"`
-	AccessLog bool   `mapstructure:"access_log"`
+	Level     string `mapstructure:"level" yaml:"level" json:"level"`
+	AccessLog bool   `mapstructure:"access_log" yaml:"access_log" json:"access_log"`
+}
+
+// AdminConfig 管理面板配置
+type AdminConfig struct {
+	APIKey string `mapstructure:"api_key" yaml:"api_key" json:"api_key,omitempty"`
 }
 
 var appConfig *Config
 
-// Load 加载配置
 func Load() (*Config, error) {
+	return loadFromPath(configPath())
+}
+
+func loadFromPath(filePath string) (*Config, error) {
 	v := viper.New()
 
-	// 设置默认值
 	setDefaults(v)
-
-	// 从配置文件读取
-	configPath := os.Getenv("CONFIG_PATH")
-	if configPath == "" {
-		configPath = "./config.yaml"
-	}
-
-	v.SetConfigFile(configPath)
+	v.SetConfigFile(filePath)
 	v.SetConfigType("yaml")
-
-	// 允许环境变量覆盖
 	v.SetEnvPrefix("QUOTA")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
 	if err := v.ReadInConfig(); err != nil {
-		// 配置文件不存在时使用默认值
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, err
 		}
@@ -136,17 +136,76 @@ func Load() (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-
-	if err := validateIdentityConfig(&cfg); err != nil {
-		return nil, err
-	}
-
-	if err := validateQuotaRules(&cfg); err != nil {
+	if err := validateConfig(&cfg); err != nil {
 		return nil, err
 	}
 
 	appConfig = &cfg
 	return &cfg, nil
+}
+
+func validateConfig(cfg *Config) error {
+	if err := validateIdentityConfig(cfg); err != nil {
+		return err
+	}
+	if err := validateQuotaRules(cfg); err != nil {
+		return err
+	}
+	return nil
+}
+
+func configPath() string {
+	path := os.Getenv("CONFIG_PATH")
+	if path == "" {
+		return "./config.yaml"
+	}
+	return path
+}
+
+func ConfigPath() string {
+	return configPath()
+}
+
+func Validate(cfg *Config) error {
+	return validateConfig(cfg)
+}
+
+func MarshalYAML(cfg *Config) ([]byte, error) {
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.TrimSpace(data), nil
+}
+
+func LoadFromYAML(data []byte) (*Config, error) {
+	v := viper.New()
+	setDefaults(v)
+	v.SetConfigType("yaml")
+	if err := v.ReadConfig(bytes.NewReader(data)); err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, err
+	}
+	if err := validateConfig(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func Save(cfg *Config) error {
+	data, err := MarshalYAML(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configPath(), append(data, '\n'), 0644)
 }
 
 func validateIdentityConfig(cfg *Config) error {
@@ -284,6 +343,9 @@ func setDefaults(v *viper.Viper) {
 	// Logging
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.access_log", true)
+
+	// Admin
+	v.SetDefault("admin.api_key", "")
 }
 
 // GetConfig 获取配置

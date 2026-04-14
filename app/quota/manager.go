@@ -3,10 +3,12 @@ package quota
 import (
 	"context"
 	"fmt"
-	"gin_base/app/config"
-	"gin_base/app/helper/log_helper"
+	"sort"
 	"strings"
 	"time"
+
+	"gin_base/app/config"
+	"gin_base/app/helper/log_helper"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -16,6 +18,19 @@ type windowSpec struct {
 	count     int
 	duration  time.Duration
 	dayWindow bool
+}
+
+type ActiveQuotaRow struct {
+	Identity     string `json:"identity"`
+	IdentityType string `json:"identity_type"`
+	RuleName     string `json:"rule_name"`
+	Success      int    `json:"success_count"`
+	Pending      int    `json:"pending_count"`
+	Limit        int    `json:"limit"`
+	Remaining    int    `json:"remaining"`
+	Window       string `json:"window"`
+	WindowCount  int    `json:"window_count"`
+	PeriodKey    string `json:"period_key"`
 }
 
 func formatWindow(rule *config.QuotaRuleConfig) string {
@@ -269,6 +284,131 @@ func (m *Manager) resetByRule(rule *config.QuotaRuleConfig, identity string) err
 	ctx := context.Background()
 	_, err := m.client.Eval(ctx, ResetScript, []string{key}).Result()
 	return err
+}
+
+func (m *Manager) ListActiveStatuses(identityFilter, ruleFilter string, page, pageSize int) ([]ActiveQuotaRow, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+
+	rules := m.config.Rules
+	if ruleFilter != "" {
+		rule := m.GetRule(ruleFilter)
+		if rule == nil {
+			return nil, 0, fmt.Errorf("quota rule not found: %s", ruleFilter)
+		}
+		rules = []config.QuotaRuleConfig{*rule}
+	}
+
+	seen := make(map[string]struct{})
+	rows := make([]ActiveQuotaRow, 0)
+	identityFilter = strings.ToLower(identityFilter)
+
+	for i := range rules {
+		rule := &rules[i]
+		periodKey := m.getPeriodKey(rule)
+		identities, err := m.scanRuleIdentities(rule.Name, periodKey)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		for _, identity := range identities {
+			if identityFilter != "" && !strings.Contains(strings.ToLower(identity), identityFilter) {
+				continue
+			}
+			key := rule.Name + "\x00" + identity
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			status, err := m.getStatusByRule(rule, identity)
+			if err != nil {
+				return nil, 0, err
+			}
+			rows = append(rows, ActiveQuotaRow{
+				Identity:     identity,
+				IdentityType: parseIdentityType(identity),
+				RuleName:     status.RuleName,
+				Success:      status.Success,
+				Pending:      status.Pending,
+				Limit:        status.Limit,
+				Remaining:    status.Remaining,
+				Window:       status.Window,
+				WindowCount:  status.WindowCount,
+				PeriodKey:    status.PeriodKey,
+			})
+		}
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Remaining != rows[j].Remaining {
+			return rows[i].Remaining < rows[j].Remaining
+		}
+		if rows[i].Identity != rows[j].Identity {
+			return rows[i].Identity < rows[j].Identity
+		}
+		return rows[i].RuleName < rows[j].RuleName
+	})
+
+	total := len(rows)
+	start := (page - 1) * pageSize
+	if start >= total {
+		return []ActiveQuotaRow{}, total, nil
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	return rows[start:end], total, nil
+}
+
+func (m *Manager) scanRuleIdentities(ruleName, periodKey string) ([]string, error) {
+	ctx := context.Background()
+	pattern := m.buildKey(ruleName, periodKey, "*")
+	cursor := uint64(0)
+	identities := make([]string, 0)
+	seen := make(map[string]struct{})
+	prefix := fmt.Sprintf("quota:%s:%s:", ruleName, periodKey)
+
+	for {
+		keys, next, err := m.client.Scan(ctx, cursor, pattern, 200).Result()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range keys {
+			identity, ok := strings.CutPrefix(key, prefix)
+			if !ok || identity == "" {
+				continue
+			}
+			if _, exists := seen[identity]; exists {
+				continue
+			}
+			seen[identity] = struct{}{}
+			identities = append(identities, identity)
+		}
+		if next == 0 {
+			break
+		}
+		cursor = next
+	}
+
+	sort.Strings(identities)
+	return identities, nil
+}
+
+func parseIdentityType(identity string) string {
+	parts := strings.SplitN(identity, ":", 2)
+	if len(parts) == 2 && parts[0] != "" {
+		return parts[0]
+	}
+	return "unknown"
 }
 
 // GetRule 获取规则
