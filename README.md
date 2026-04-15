@@ -118,7 +118,19 @@ quota:
       include_paths:
         - /api/other/**
       quota_exceeded_body: ""
+
+# 管理面板配置
+admin:
+  api_key: ""
 ```
+
+### 管理面板鉴权说明
+
+- `admin.api_key` 默认值是空字符串 `""`
+- 为空时表示未启用管理鉴权，`/__admin/ui` 和其他 `/__admin` 接口可直接访问
+- 设置为非空后，`/__admin/ui` 会先进入登录页，其他 `/__admin` 接口需要携带 `X-API-Key`
+- 可直接访问 `GET /__admin/ui?api_key=你的密钥`，页面会自动带入并尝试登录
+- 前端登录成功后会把 API Key 保存在浏览器本地，后续请求自动附带 `X-API-Key`
 
 ### identity.extractors 说明
 
@@ -185,6 +197,33 @@ export QUOTA_REDIS_ADDR=localhost:6379
 ```
 
 ## API 接口
+
+### 管理面板访问
+
+- 管理页面入口：`GET /__admin/ui`
+- 未配置 `admin.api_key` 时可直接访问
+- 配置了 `admin.api_key` 后，可先打开 `GET /__admin/ui?api_key=你的密钥` 让页面自动尝试登录
+- 受保护的管理接口需要在请求头中带上 `X-API-Key: <admin.api_key>`
+
+### 管理密钥校验
+
+```
+POST /__admin/login
+Content-Type: application/json
+
+{
+  "api_key": "your-admin-key"
+}
+```
+
+响应：
+
+```json
+{
+  "code": 200,
+  "message": "验证通过"
+}
+```
 
 ### 健康检查
 
