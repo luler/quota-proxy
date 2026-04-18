@@ -12,7 +12,6 @@ import (
 	"gin_base/app/success"
 	"io"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -27,14 +26,101 @@ type compiledRegexMatcher struct {
 	exclude []*regexp.Regexp
 }
 
+// pathKind 路径模式分类，避免在热路径上重复判断 pattern 形态
+type pathKind int
+
+const (
+	pathKindPrefix     pathKind = iota // 无通配符：路径 HasPrefix(pattern)
+	pathKindDoubleStar                 // 以 "**" 结尾：路径 HasPrefix(去掉 ** 后的前缀)
+	pathKindGlob                       // 含 *?[：先走 filepath.Match，再退化为前缀匹配
+)
+
+type compiledPath struct {
+	raw    string
+	kind   pathKind
+	prefix string
+}
+
+func compilePath(pattern string) compiledPath {
+	if strings.HasSuffix(pattern, "**") {
+		return compiledPath{raw: pattern, kind: pathKindDoubleStar, prefix: strings.TrimSuffix(pattern, "**")}
+	}
+	if strings.ContainsAny(pattern, "*?[") {
+		return compiledPath{raw: pattern, kind: pathKindGlob}
+	}
+	return compiledPath{raw: pattern, kind: pathKindPrefix}
+}
+
+func (p *compiledPath) matches(path string) bool {
+	switch p.kind {
+	case pathKindDoubleStar:
+		return strings.HasPrefix(path, p.prefix)
+	case pathKindGlob:
+		if matched, _ := filepath.Match(p.raw, path); matched {
+			return true
+		}
+		return strings.HasPrefix(path, p.raw)
+	default:
+		return strings.HasPrefix(path, p.raw)
+	}
+}
+
+func compilePaths(patterns []string) []compiledPath {
+	if len(patterns) == 0 {
+		return nil
+	}
+	out := make([]compiledPath, len(patterns))
+	for i, p := range patterns {
+		out[i] = compilePath(p)
+	}
+	return out
+}
+
+type compiledRule struct {
+	rule         *config.QuotaRuleConfig
+	includePaths []compiledPath
+}
+
+// requestCanon 单次请求作用域的 canonicalize 结果缓存。
+// 当多个 rule 的 include_paths 都命中同一请求时，原实现会多次重复读 body / 解析 JSON /
+// 遍历 headers。缓存后同一请求内每种 canonical 形态最多只计算一次。
+type requestCanon struct {
+	body          []byte
+	bodyErr       error
+	bodyDone      bool
+	queryForm     string
+	queryFormErr  error
+	queryFormDone bool
+	jsonBody      string
+	jsonBodyErr   error
+	jsonBodyDone  bool
+	headers       string
+	headersDone   bool
+}
+
+const canonContextKey = "__qp_request_canon"
+
+func getCanon(c *gin.Context) *requestCanon {
+	if v, ok := c.Get(canonContextKey); ok {
+		if cache, ok := v.(*requestCanon); ok {
+			return cache
+		}
+	}
+	cache := &requestCanon{}
+	c.Set(canonContextKey, cache)
+	return cache
+}
+
 // QuotaMiddleware 配额中间件
 type QuotaMiddleware struct {
-	identifier *identity.Identifier
-	judge      success.Judge
-	manager    *quota.Manager
-	proxy      *proxy.ReverseProxy
-	config     *config.Config
-	matchers   map[string]compiledRuleMatcher
+	identifier    *identity.Identifier
+	judge         success.Judge
+	manager       *quota.Manager
+	proxy         *proxy.ReverseProxy
+	config        *config.Config
+	matchers      map[string]compiledRuleMatcher
+	excludePaths  []compiledPath
+	compiledRules []compiledRule
 }
 
 type compiledRuleMatcher struct {
@@ -60,13 +146,24 @@ func NewQuotaMiddleware(cfg *config.Config) (*QuotaMiddleware, error) {
 		return nil, err
 	}
 
+	excludePaths := compilePaths(cfg.Quota.ExcludePaths)
+	compiledRules := make([]compiledRule, len(cfg.Quota.Rules))
+	for i := range cfg.Quota.Rules {
+		compiledRules[i] = compiledRule{
+			rule:         &cfg.Quota.Rules[i],
+			includePaths: compilePaths(cfg.Quota.Rules[i].IncludePaths),
+		}
+	}
+
 	return &QuotaMiddleware{
-		identifier: identifier,
-		judge:      judge,
-		manager:    manager,
-		proxy:      p,
-		config:     cfg,
-		matchers:   matchers,
+		identifier:    identifier,
+		judge:         judge,
+		manager:       manager,
+		proxy:         p,
+		config:        cfg,
+		matchers:      matchers,
+		excludePaths:  excludePaths,
+		compiledRules: compiledRules,
 	}, nil
 }
 
@@ -299,17 +396,17 @@ func (m *QuotaMiddleware) forwardRequest(c *gin.Context, startTime time.Time) {
 func (m *QuotaMiddleware) matchRule(c *gin.Context) *config.QuotaRuleConfig {
 	path := c.Request.URL.Path
 
-	for _, excludePath := range m.config.Quota.ExcludePaths {
-		if m.matchPath(path, excludePath) {
+	for i := range m.excludePaths {
+		if m.excludePaths[i].matches(path) {
 			return nil
 		}
 	}
 
-	for i := range m.config.Quota.Rules {
-		rule := &m.config.Quota.Rules[i]
-		for _, includePath := range rule.IncludePaths {
-			if m.matchPath(path, includePath) && m.matchRequest(rule, c) {
-				return rule
+	for i := range m.compiledRules {
+		cr := &m.compiledRules[i]
+		for j := range cr.includePaths {
+			if cr.includePaths[j].matches(path) && m.matchRequest(cr.rule, c) {
+				return cr.rule
 			}
 		}
 	}
@@ -352,25 +449,36 @@ func (m *QuotaMiddleware) readRequestBody(c *gin.Context) ([]byte, error) {
 		return nil, nil
 	}
 
+	cache := getCanon(c)
+	if cache.bodyDone {
+		return cache.body, cache.bodyErr
+	}
+
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		cache.bodyErr = err
+		cache.bodyDone = true
 		return nil, err
 	}
 
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+	cache.body = body
+	cache.bodyDone = true
 	return body, nil
 }
 
 func (m *QuotaMiddleware) canonicalizeQueryForm(c *gin.Context) (string, error) {
-	values := url.Values{}
-	for key, vals := range c.Request.URL.Query() {
-		for _, value := range vals {
-			values.Add(key, value)
-		}
+	cache := getCanon(c)
+	if cache.queryFormDone {
+		return cache.queryForm, cache.queryFormErr
 	}
+
+	values := c.Request.URL.Query()
 
 	body, err := m.readRequestBody(c)
 	if err != nil {
+		cache.queryFormErr = err
+		cache.queryFormDone = true
 		return "", err
 	}
 
@@ -378,6 +486,8 @@ func (m *QuotaMiddleware) canonicalizeQueryForm(c *gin.Context) (string, error) 
 	if len(body) > 0 && (strings.Contains(contentType, "application/x-www-form-urlencoded") || strings.Contains(contentType, "multipart/form-data")) {
 		if err := c.Request.ParseMultipartForm(32 << 20); err != nil && err != http.ErrNotMultipart {
 			if err := c.Request.ParseForm(); err != nil {
+				cache.queryFormErr = err
+				cache.queryFormDone = true
 				return "", err
 			}
 		}
@@ -392,48 +502,75 @@ func (m *QuotaMiddleware) canonicalizeQueryForm(c *gin.Context) (string, error) 
 		}
 	}
 
-	return values.Encode(), nil
+	result := values.Encode()
+	cache.queryForm = result
+	cache.queryFormDone = true
+	return result, nil
 }
 
 func (m *QuotaMiddleware) canonicalizeJSONBody(c *gin.Context) (string, error) {
+	cache := getCanon(c)
+	if cache.jsonBodyDone {
+		return cache.jsonBody, cache.jsonBodyErr
+	}
+
 	body, err := m.readRequestBody(c)
 	if err != nil {
+		cache.jsonBodyErr = err
+		cache.jsonBodyDone = true
 		return "", err
 	}
 	if len(body) == 0 {
+		cache.jsonBodyDone = true
 		return "", nil
 	}
 
 	contentType := strings.ToLower(c.GetHeader("Content-Type"))
 	if contentType != "" && !strings.Contains(contentType, "application/json") {
+		cache.jsonBodyDone = true
 		return "", nil
 	}
 
 	var payload interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
+		cache.jsonBodyDone = true
 		return "", nil
 	}
 
 	canonical, err := json.Marshal(payload)
 	if err != nil {
+		cache.jsonBodyErr = err
+		cache.jsonBodyDone = true
 		return "", err
 	}
 
-	return string(canonical), nil
+	cache.jsonBody = string(canonical)
+	cache.jsonBodyDone = true
+	return cache.jsonBody, nil
 }
 
 func (m *QuotaMiddleware) canonicalizeHeaders(c *gin.Context) string {
-	lines := make([]string, 0)
-	for name, vals := range c.Request.Header {
+	cache := getCanon(c)
+	if cache.headersDone {
+		return cache.headers
+	}
+
+	headers := c.Request.Header
+	lines := make([]string, 0, len(headers)*2)
+	for name, vals := range headers {
 		lowerName := strings.ToLower(name)
-		sortedVals := append([]string(nil), vals...)
+		sortedVals := make([]string, len(vals))
+		copy(sortedVals, vals)
 		sort.Strings(sortedVals)
 		for _, value := range sortedVals {
 			lines = append(lines, lowerName+":"+strings.TrimSpace(value))
 		}
 	}
 	sort.Strings(lines)
-	return strings.Join(lines, "\n")
+
+	cache.headers = strings.Join(lines, "\n")
+	cache.headersDone = true
+	return cache.headers
 }
 
 func matchRegexDomain(canonical string, matcher *compiledRegexMatcher) bool {
@@ -525,13 +662,9 @@ func compileRegexMatcher(cfg *config.RequestRegexMatchConfig) (*compiledRegexMat
 }
 
 func (m *QuotaMiddleware) matchPath(path, pattern string) bool {
-	if matched, _ := filepath.Match(pattern, path); matched {
-		return true
-	}
-	if strings.HasSuffix(pattern, "**") {
-		return strings.HasPrefix(path, strings.TrimSuffix(pattern, "**"))
-	}
-	return strings.HasPrefix(path, pattern)
+	// 保留方法以兼容外部调用；当前内部均已切换到预编译 compiledPath.matches。
+	cp := compilePath(pattern)
+	return cp.matches(path)
 }
 
 // respondQuotaExceeded 返回配额超限响应

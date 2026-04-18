@@ -43,8 +43,14 @@ type RedisConfig struct {
 	DB       int    `mapstructure:"db" yaml:"db" json:"db"`
 }
 
-// IdentityExtractorConfig 请求头提取身份配置
+// IdentityExtractorConfig 身份提取器配置
+// 同一条 extractor 描述"从一个参数源按名字取值 + 可选 regex 提取 + 命名"
 type IdentityExtractorConfig struct {
+	// Source 取值来源：header（默认）/ query / cookie
+	Source string `mapstructure:"source" yaml:"source" json:"source"`
+	// Key 参数名：header 名 / query 参数名 / cookie 名
+	// 兼容旧配置：当 Source 为空或 header 时，若 Key 为空则退化为读取 Header 字段
+	Key    string `mapstructure:"key" yaml:"key" json:"key"`
 	Header string `mapstructure:"header" yaml:"header" json:"header"`
 	Regex  string `mapstructure:"regex" yaml:"regex" json:"regex"`
 	Group  int    `mapstructure:"group" yaml:"group" json:"group"`
@@ -209,10 +215,35 @@ func Save(cfg *Config) error {
 }
 
 func validateIdentityConfig(cfg *Config) error {
+	strategy := strings.ToLower(strings.TrimSpace(cfg.Identity.Strategy))
+	switch strategy {
+	case "", "header_priority", "merge_all":
+	default:
+		return fmt.Errorf("invalid identity.strategy: %q, must be one of header_priority/merge_all", cfg.Identity.Strategy)
+	}
+
 	for i, extractor := range cfg.Identity.Extractors {
-		if extractor.Header == "" {
-			return fmt.Errorf("invalid identity.extractors[%d].header: cannot be empty", i)
+		source := strings.ToLower(strings.TrimSpace(extractor.Source))
+		if source == "" {
+			source = "header"
 		}
+		switch source {
+		case "header", "query", "cookie":
+		default:
+			return fmt.Errorf("invalid identity.extractors[%d].source: %q, must be one of header/query/cookie", i, extractor.Source)
+		}
+
+		key := strings.TrimSpace(extractor.Key)
+		if key == "" && source == "header" {
+			key = strings.TrimSpace(extractor.Header)
+		}
+		if key == "" {
+			if source == "header" {
+				return fmt.Errorf("invalid identity.extractors[%d]: header (or key) cannot be empty", i)
+			}
+			return fmt.Errorf("invalid identity.extractors[%d]: key cannot be empty for source=%s", i, source)
+		}
+
 		if extractor.Name == "" {
 			return fmt.Errorf("invalid identity.extractors[%d].name: cannot be empty", i)
 		}

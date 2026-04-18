@@ -18,18 +18,43 @@ redis:
 
 # 访问主体识别配置
 identity:
-  # 当前按 extractors 的顺序识别访问主体
+  # 策略：
+  # - header_priority（默认）：按 extractors 顺序提取，命中第一个后作为 identity
+  # - merge_all：遍历所有 extractors，把命中结果按 name:value 用 | 拼接成单一标识，
+  #   例如 app_id:myapp|user_id:alice，可用于"多维联合"作为唯一分组键
   strategy: header_priority
-  # 支持两种写法：
-  # 1) 直接取整个 header 值：只配 header + name
-  # 2) 从 header 值中用 regex 提取指定分组：配 header + regex + group + name
+  # 每条 extractor 描述一个取值来源，统一格式：
+  #   source: header / query / cookie（必填，推荐显式填写）
+  #   key:    参数名（header 名 / query 参数名 / cookie 名）
+  #   regex + group: 可选，对取到的原始值再做一次 regex 抽取（group=0 表示整体）
+  #                  所有 source 都支持 regex + group，不限于 header
+  #   name:   最终 identity 中的字段名（如 name=user_id、值为 alice，则输出 user_id:alice）
+  # 兼容写法：source=header 时，可用 header 字段代替 key（兼容旧配置，不推荐新配置使用）
   extractors:
-    - header: Cookie
+    # 示例 1：从 Cookie 请求头里用 regex 抽取 member_id
+    - source: header
+      key: Cookie
       regex: '(^|;\s*)member_id=([^;]+)'
       group: 2
       name: member_id
-    - header: X-User-Id
+    # 示例 2：直接取整条 header 值
+    - source: header
+      key: X-User-Id
       name: X-User-Id
+    # 示例 3：从 URL query 参数取值
+    # - source: query
+    #   key: app_id
+    #   name: app_id
+    # 示例 4：从 cookie 直接取值（无需 regex）
+    # - source: cookie
+    #   key: member_id
+    #   name: member_id
+    # 示例 5：query 参数搭配 regex 抽取（如 token=prefix-abc123 只要 abc123 这段）
+    # - source: query
+    #   key: token
+    #   regex: '^prefix-(.+)$'
+    #   group: 1
+    #   name: token
   # 当前面配置的 extractors 都未命中时，是否回退为客户端 IP（例如 ip:127.0.0.1）
   fallback_to_ip: true
 
@@ -124,4 +149,4 @@ admin:
   # 默认为空，表示未启用管理鉴权
   # 设置后，访问 /__admin/ui 以及其他 /__admin 接口需要提供对应的 API Key
   # 可通过 /__admin/ui?api_key=你的密钥 自动带入登录
-  api_key: ""
+  api_key: "admin"

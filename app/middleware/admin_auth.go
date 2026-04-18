@@ -24,7 +24,8 @@ func AdminAuth(store *RuntimeStore) gin.HandlerFunc {
 
 		apiKey := strings.TrimSpace(runtime.Config.Admin.APIKey)
 		if apiKey == "" {
-			c.Next()
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "管理鉴权未启用，请先在配置文件中设置 admin.api_key"})
+			c.Abort()
 			return
 		}
 

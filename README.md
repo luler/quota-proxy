@@ -134,10 +134,15 @@ admin:
 
 ### identity.extractors 说明
 
-- 按 `extractors` 配置顺序依次尝试，命中第一个后立即作为 identity
-- 直接提取整个请求头：配置 `header + name`
-- 从请求头值中按 regex 提取：配置 `header + regex + group + name`
-- 提取后的 identity 格式保持为 `type:value`，例如 `member_id:abc123`、`X-User-Id:user123`
+- `strategy` 支持两种：
+  - `header_priority`（默认）：按 `extractors` 顺序依次尝试，命中第一个后立即作为 identity
+  - `merge_all`：遍历所有 `extractors`，把命中结果按 `name:value` 用 `|` 拼接成**单一标识**（用于多维联合分组，例如 `app_id:myapp|user_id:alice`）；未命中的 extractor 会贡献空值（如 `app_id:myapp|user_id:`）
+- 每条 `extractor` 描述一个取值来源：
+  - `source`：`header`（默认，可省略）/ `query` / `cookie`
+  - `key`：参数名；`source=header` 时为兼容旧配置，可继续写 `header` 字段
+  - `regex + group`：可选，对取到的原始值再做一次 regex 抽取（group=0 表示整体）
+  - `name`：最终 identity 中的字段名
+- 提取后的 identity 格式保持为 `type:value`，例如 `member_id:abc123`、`X-User-Id:user123`；merge_all 下为 `name1:v1|name2:v2`
 - 所有 extractor 都未命中时，若 `fallback_to_ip: true`，则回退为 `ip:<client-ip>`
 
 ### 路径规则说明

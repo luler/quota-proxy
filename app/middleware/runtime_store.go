@@ -12,6 +12,7 @@ import (
 type Runtime struct {
 	Config          *config.Config
 	QuotaMiddleware *QuotaMiddleware
+	handler         gin.HandlerFunc
 }
 
 type RuntimeStore struct {
@@ -54,11 +55,11 @@ func (s *RuntimeStore) Reload(cfg *config.Config) error {
 func (s *RuntimeStore) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		current := s.Current()
-		if current == nil || current.QuotaMiddleware == nil {
+		if current == nil || current.handler == nil {
 			c.JSON(503, gin.H{"code": 503, "message": "运行时未初始化"})
 			return
 		}
-		current.QuotaMiddleware.Handler()(c)
+		current.handler(c)
 	}
 }
 
@@ -67,5 +68,5 @@ func newRuntime(cfg *config.Config) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Runtime{Config: cfg, QuotaMiddleware: qm}, nil
+	return &Runtime{Config: cfg, QuotaMiddleware: qm, handler: qm.Handler()}, nil
 }

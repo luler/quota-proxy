@@ -53,7 +53,7 @@ func (h *AdminHandler) Login(c *gin.Context) {
 		return
 	}
 	if apiKey == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 200, "message": "未启用管理鉴权"})
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "管理鉴权未启用，请先在配置文件中设置 admin.api_key"})
 		return
 	}
 	if strings.TrimSpace(req.APIKey) == "" {
@@ -85,8 +85,8 @@ func (h *AdminHandler) GetSummary(c *gin.Context) {
 			"target": cfg.Upstream.Target,
 		},
 		"redis": gin.H{
-			"addr":            cfg.Redis.Addr,
-			"db":              cfg.Redis.DB,
+			"addr":             cfg.Redis.Addr,
+			"db":               cfg.Redis.DB,
 			"password_present": cfg.Redis.Password != "",
 		},
 		"identity": gin.H{
@@ -294,14 +294,14 @@ func (h *AdminHandler) ResetQuota(c *gin.Context) {
 }
 
 type editableConfig struct {
-	Server      editableServerConfig      `json:"server"`
-	Upstream    config.UpstreamConfig     `json:"upstream"`
-	Redis       editableRedisConfig       `json:"redis"`
-	Identity    config.IdentityConfig     `json:"identity"`
-	Quota       config.QuotaConfig        `json:"quota"`
-	SuccessRule config.SuccessRuleConfig  `json:"success_rule"`
-	Logging     config.LoggingConfig      `json:"logging"`
-	Admin       config.AdminConfig        `json:"admin"`
+	Server      editableServerConfig     `json:"server"`
+	Upstream    config.UpstreamConfig    `json:"upstream"`
+	Redis       editableRedisConfig      `json:"redis"`
+	Identity    config.IdentityConfig    `json:"identity"`
+	Quota       config.QuotaConfig       `json:"quota"`
+	SuccessRule config.SuccessRuleConfig `json:"success_rule"`
+	Logging     config.LoggingConfig     `json:"logging"`
+	Admin       config.AdminConfig       `json:"admin"`
 }
 
 type editableServerConfig struct {

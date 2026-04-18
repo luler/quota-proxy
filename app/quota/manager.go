@@ -87,7 +87,8 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 }
 
 func (m *Manager) buildKey(ruleName, periodKey, identity string) string {
-	return fmt.Sprintf("quota:%s:%s:%s", ruleName, periodKey, identity)
+	// 直接字符串拼接比 fmt.Sprintf 省一次 reflect + interface 装箱
+	return "quota:" + ruleName + ":" + periodKey + ":" + identity
 }
 
 func (m *Manager) now() time.Time {
@@ -375,7 +376,7 @@ func (m *Manager) scanRuleIdentities(ruleName, periodKey string) ([]string, erro
 	cursor := uint64(0)
 	identities := make([]string, 0)
 	seen := make(map[string]struct{})
-	prefix := fmt.Sprintf("quota:%s:%s:", ruleName, periodKey)
+	prefix := "quota:" + ruleName + ":" + periodKey + ":"
 
 	for {
 		keys, next, err := m.client.Scan(ctx, cursor, pattern, 200).Result()
