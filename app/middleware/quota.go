@@ -607,7 +607,7 @@ func compileRuleMatchers(rules []config.QuotaRuleConfig) (map[string]compiledRul
 	for _, rule := range rules {
 		matcher, err := compileRequestMatcher(&rule.RequestMatch)
 		if err != nil {
-			return nil, fmt.Errorf("compile matcher for rule %s: %w", rule.Name, err)
+			return nil, fmt.Errorf("编译规则 %s 的请求匹配器失败: %w", rule.Name, err)
 		}
 		matchers[rule.Name] = matcher
 	}

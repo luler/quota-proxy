@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -44,7 +45,7 @@ func NewAdminHandler(store *middleware.RuntimeStore) *AdminHandler {
 func (h *AdminHandler) AdminUI(c *gin.Context) {
 	content, err := adminUIFS.ReadFile("adminui/index.html")
 	if err != nil {
-		c.String(http.StatusInternalServerError, "failed to load admin ui")
+		c.String(http.StatusInternalServerError, "加载管理页面失败")
 		return
 	}
 	c.Data(http.StatusOK, "text/html; charset=utf-8", content)
@@ -239,7 +240,7 @@ func (h *AdminHandler) SaveConfig(c *gin.Context) {
 		return
 	}
 	if err := config.Save(cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "保存配置失败", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "保存配置失败，请检查配置文件路径和写入权限", "error": formatAdminRuntimeError(err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "配置已保存", "config_path": config.ConfigPath()})
@@ -249,11 +250,11 @@ func (h *AdminHandler) SaveConfig(c *gin.Context) {
 func (h *AdminHandler) ReloadConfig(c *gin.Context) {
 	cfg, err := config.Load()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "重新加载配置失败", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "重新加载配置失败，请检查配置内容是否正确", "error": formatAdminRuntimeError(err)})
 		return
 	}
 	if err := h.store.Reload(cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "更新运行时失败", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "更新运行时失败，请稍后重试", "error": formatAdminRuntimeError(err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "配置已重新加载"})
@@ -418,6 +419,30 @@ func (h *AdminHandler) bindEditableConfig(c *gin.Context) (*config.Config, error
 	return cfg, nil
 }
 
+func formatAdminRuntimeError(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, quota.ErrRuleNotFound) {
+		return "配额规则不存在"
+	}
+	if errors.Is(err, quota.ErrInvalidRedisResult) {
+		return "配额服务返回异常数据"
+	}
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		return "文件读写失败，请检查配置文件路径和权限"
+	}
+	return "详细错误已写入服务日志"
+}
+
+func formatAdminValidationError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
 func (h *AdminHandler) currentRuntime(c *gin.Context) *middleware.Runtime {
 	runtime := h.store.Current()
 	if runtime == nil || runtime.Config == nil || runtime.QuotaMiddleware == nil {
@@ -446,14 +471,14 @@ func (h *AdminHandler) currentAdminAPIKey(c *gin.Context) (string, bool) {
 
 func (h *AdminHandler) respondManagerError(c *gin.Context, message string, err error) {
 	status := http.StatusInternalServerError
-	if strings.Contains(err.Error(), "quota rule not found") {
+	if errors.Is(err, quota.ErrRuleNotFound) {
 		status = http.StatusBadRequest
 	}
-	c.JSON(status, gin.H{"code": status, "message": message, "error": err.Error()})
+	c.JSON(status, gin.H{"code": status, "message": message, "error": formatAdminRuntimeError(err)})
 }
 
 func (h *AdminHandler) respondBadRequest(c *gin.Context, err error) {
-	c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "配置校验失败", "error": err.Error()})
+	c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "配置校验失败", "error": formatAdminValidationError(err)})
 }
 
 func parsePositiveInt(raw string, fallback int) int {

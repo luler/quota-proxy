@@ -35,6 +35,11 @@ type ActiveQuotaRow struct {
 	PeriodKey    string `json:"period_key"`
 }
 
+var (
+	ErrRuleNotFound       = errors.New("quota rule not found")
+	ErrInvalidRedisResult = errors.New("invalid redis result")
+)
+
 func formatWindow(rule *config.QuotaRuleConfig) string {
 	return strings.ToLower(rule.Window)
 }
@@ -186,7 +191,7 @@ func (m *Manager) TryReserve(rule *config.QuotaRuleConfig, identity string) (boo
 
 	res, ok := result.([]interface{})
 	if !ok || len(res) != 4 {
-		return false, 0, 0, 0, fmt.Errorf("invalid redis result")
+		return false, 0, 0, 0, ErrInvalidRedisResult
 	}
 
 	successFlag := res[0].(int64) == 1
@@ -217,7 +222,7 @@ func (m *Manager) Rollback(rule *config.QuotaRuleConfig, identity string) error 
 func (m *Manager) GetStatus(ruleName string, identity string) (*QuotaStatus, error) {
 	rule := m.GetRule(ruleName)
 	if rule == nil {
-		return nil, fmt.Errorf("quota rule not found: %s", ruleName)
+		return nil, fmt.Errorf("%w: %s", ErrRuleNotFound, ruleName)
 	}
 
 	return m.getStatusByRule(rule, identity)
@@ -246,7 +251,7 @@ func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string)
 
 	res, ok := result.([]interface{})
 	if !ok || len(res) != 3 {
-		return nil, fmt.Errorf("invalid redis result")
+		return nil, ErrInvalidRedisResult
 	}
 
 	successCount := int(res[0].(int64))
@@ -274,7 +279,7 @@ func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string)
 func (m *Manager) Reset(ruleName string, identity string) error {
 	rule := m.GetRule(ruleName)
 	if rule == nil {
-		return fmt.Errorf("quota rule not found: %s", ruleName)
+		return fmt.Errorf("%w: %s", ErrRuleNotFound, ruleName)
 	}
 
 	return m.resetByRule(rule, identity)
@@ -312,7 +317,7 @@ func (m *Manager) ListActiveStatuses(identityFilter, ruleFilter string, page, pa
 	if ruleFilter != "" {
 		rule := m.GetRule(ruleFilter)
 		if rule == nil {
-			return nil, 0, fmt.Errorf("quota rule not found: %s", ruleFilter)
+			return nil, 0, fmt.Errorf("%w: %s", ErrRuleNotFound, ruleFilter)
 		}
 		rules = []config.QuotaRuleConfig{*rule}
 	}

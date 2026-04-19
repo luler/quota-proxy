@@ -216,12 +216,16 @@ func Save(cfg *Config) error {
 	return os.WriteFile(configPath(), append(data, '\n'), 0644)
 }
 
+func invalidRegexError(field string, err error) error {
+	return fmt.Errorf("%s 正则表达式无效: %s", field, err)
+}
+
 func validateIdentityConfig(cfg *Config) error {
 	strategy := strings.ToLower(strings.TrimSpace(cfg.Identity.Strategy))
 	switch strategy {
 	case "", "header_priority", "merge_all":
 	default:
-		return fmt.Errorf("invalid identity.strategy: %q, must be one of header_priority/merge_all", cfg.Identity.Strategy)
+		return fmt.Errorf("identity.strategy 配置无效：%q，可选值为 header_priority/merge_all", cfg.Identity.Strategy)
 	}
 
 	for i, extractor := range cfg.Identity.Extractors {
@@ -232,7 +236,7 @@ func validateIdentityConfig(cfg *Config) error {
 		switch source {
 		case "header", "query", "cookie":
 		default:
-			return fmt.Errorf("invalid identity.extractors[%d].source: %q, must be one of header/query/cookie", i, extractor.Source)
+			return fmt.Errorf("identity.extractors[%d].source 配置无效：%q，可选值为 header/query/cookie", i, extractor.Source)
 		}
 
 		key := strings.TrimSpace(extractor.Key)
@@ -241,30 +245,30 @@ func validateIdentityConfig(cfg *Config) error {
 		}
 		if key == "" {
 			if source == "header" {
-				return fmt.Errorf("invalid identity.extractors[%d]: header (or key) cannot be empty", i)
+				return fmt.Errorf("identity.extractors[%d].header（或 key）不能为空", i)
 			}
-			return fmt.Errorf("invalid identity.extractors[%d]: key cannot be empty for source=%s", i, source)
+			return fmt.Errorf("identity.extractors[%d].key 不能为空（source=%s）", i, source)
 		}
 
 		if extractor.Name == "" {
-			return fmt.Errorf("invalid identity.extractors[%d].name: cannot be empty", i)
+			return fmt.Errorf("identity.extractors[%d].name 不能为空", i)
 		}
 		if extractor.Group < 0 {
-			return fmt.Errorf("invalid identity.extractors[%d].group: %d, must be >= 0", i, extractor.Group)
+			return fmt.Errorf("identity.extractors[%d].group 配置无效：%d，必须大于等于 0", i, extractor.Group)
 		}
 		if extractor.Regex == "" {
 			if extractor.Group != 0 {
-				return fmt.Errorf("invalid identity.extractors[%d].group: %d, direct extractor cannot set group", i, extractor.Group)
+				return fmt.Errorf("identity.extractors[%d].group 配置无效：%d，未设置 regex 时不能设置 group", i, extractor.Group)
 			}
 			continue
 		}
 
 		re, err := regexp.Compile(extractor.Regex)
 		if err != nil {
-			return fmt.Errorf("invalid identity.extractors[%d].regex: %w", i, err)
+			return invalidRegexError(fmt.Sprintf("identity.extractors[%d].regex", i), err)
 		}
 		if extractor.Group > re.NumSubexp() {
-			return fmt.Errorf("invalid identity.extractors[%d].group: %d, regex has %d capture groups", i, extractor.Group, re.NumSubexp())
+			return fmt.Errorf("identity.extractors[%d].group 配置无效：%d，regex 只有 %d 个捕获组", i, extractor.Group, re.NumSubexp())
 		}
 	}
 
@@ -275,18 +279,18 @@ func validateQuotaRules(cfg *Config) error {
 	names := make(map[string]struct{}, len(cfg.Quota.Rules))
 	for _, rule := range cfg.Quota.Rules {
 		if _, exists := names[rule.Name]; exists {
-			return fmt.Errorf("invalid quota.rules[%s].name: duplicate rule name", rule.Name)
+			return fmt.Errorf("quota.rules[%s].name 配置无效：规则名重复", rule.Name)
 		}
 		names[rule.Name] = struct{}{}
 
 		switch strings.ToLower(rule.Window) {
 		case "minute", "hour", "day":
 		default:
-			return fmt.Errorf("invalid quota.rules[%s].window: %q, must be one of minute/hour/day", rule.Name, rule.Window)
+			return fmt.Errorf("quota.rules[%s].window 配置无效：%q，可选值为 minute/hour/day", rule.Name, rule.Window)
 		}
 
 		if rule.WindowCount < 1 {
-			return fmt.Errorf("invalid quota.rules[%s].window_count: %d, must be >= 1", rule.Name, rule.WindowCount)
+			return fmt.Errorf("quota.rules[%s].window_count 配置无效：%d，必须大于等于 1", rule.Name, rule.WindowCount)
 		}
 
 		if err := validateRequestMatchRule(rule.Name, &rule.RequestMatch); err != nil {
@@ -321,18 +325,18 @@ func validateRegexMatcher(ruleName, fieldName string, matcher *RequestRegexMatch
 	}
 
 	if len(matcher.Include) == 0 && len(matcher.Exclude) == 0 {
-		return fmt.Errorf("invalid quota.rules[%s].request_match.%s: include/exclude cannot both be empty", ruleName, fieldName)
+		return fmt.Errorf("quota.rules[%s].request_match.%s 至少需要配置 include 或 exclude 之一", ruleName, fieldName)
 	}
 
 	for i, pattern := range matcher.Include {
 		if _, err := regexp.Compile(pattern); err != nil {
-			return fmt.Errorf("invalid quota.rules[%s].request_match.%s.include[%d]: %w", ruleName, fieldName, i, err)
+			return invalidRegexError(fmt.Sprintf("quota.rules[%s].request_match.%s.include[%d]", ruleName, fieldName, i), err)
 		}
 	}
 
 	for i, pattern := range matcher.Exclude {
 		if _, err := regexp.Compile(pattern); err != nil {
-			return fmt.Errorf("invalid quota.rules[%s].request_match.%s.exclude[%d]: %w", ruleName, fieldName, i, err)
+			return invalidRegexError(fmt.Sprintf("quota.rules[%s].request_match.%s.exclude[%d]", ruleName, fieldName, i), err)
 		}
 	}
 

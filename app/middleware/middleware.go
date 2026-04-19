@@ -1,11 +1,10 @@
 package middleware
 
 import (
-	"fmt"
 	"gin_base/app/helper/log_helper"
-	"github.com/gin-gonic/gin"
 	"net/http"
-	"reflect"
+
+	"github.com/gin-gonic/gin"
 )
 
 // 异常捕获中间件
@@ -14,17 +13,10 @@ func Exception() gin.HandlerFunc {
 		defer func() {
 			if r := recover(); r != nil {
 				log_helper.Error("Panic recovered", "panic", r)
-				if err, ok := r.(error); ok {
-					context.JSON(http.StatusInternalServerError, gin.H{
-						"code":    500,
-						"message": err.Error(),
-					})
-				} else {
-					context.JSON(http.StatusInternalServerError, gin.H{
-						"code":    500,
-						"message": fmt.Sprintf("%v", reflect.ValueOf(r)),
-					})
-				}
+				context.JSON(http.StatusInternalServerError, gin.H{
+					"code":    500,
+					"message": "服务器内部错误",
+				})
 				context.Abort()
 			}
 		}()

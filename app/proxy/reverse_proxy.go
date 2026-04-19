@@ -24,7 +24,7 @@ type ReverseProxy struct {
 	maxBodySize int64
 }
 
-var ErrBodyTooLarge = errors.New("body size exceeds limit")
+var ErrBodyTooLarge = errors.New("请求或响应体超过大小限制")
 
 // NewReverseProxy 创建反向代理
 func NewReverseProxy(cfg *config.UpstreamConfig, maxBodySize int64) (*ReverseProxy, error) {
@@ -87,7 +87,7 @@ func (p *ReverseProxy) Do(c *gin.Context) (*http.Response, error) {
 		lr := io.LimitReader(c.Request.Body, p.maxBodySize+1)
 		data, _ := io.ReadAll(lr)
 		if int64(len(data)) > p.maxBodySize {
-			return nil, fmt.Errorf("%w: request body exceeds %d bytes", ErrBodyTooLarge, p.maxBodySize)
+			return nil, fmt.Errorf("%w：请求体超过 %d 字节限制", ErrBodyTooLarge, p.maxBodySize)
 		}
 		bodyBytes = data
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
@@ -138,7 +138,7 @@ func (p *ReverseProxy) ReadResponse(resp *http.Response) (*ProxyResult, error) {
 		return nil, err
 	}
 	if int64(len(respBody)) > p.maxBodySize {
-		return nil, fmt.Errorf("%w: response body exceeds %d bytes", ErrBodyTooLarge, p.maxBodySize)
+		return nil, fmt.Errorf("%w：响应体超过 %d 字节限制", ErrBodyTooLarge, p.maxBodySize)
 	}
 
 	return &ProxyResult{
