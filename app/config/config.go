@@ -48,9 +48,9 @@ type RedisConfig struct {
 // IdentityExtractorConfig 身份提取器配置
 // 同一条 extractor 描述"从一个参数源按名字取值 + 可选 regex 提取 + 命名"
 type IdentityExtractorConfig struct {
-	// Source 取值来源：header（默认）/ query / cookie
+	// Source 取值来源：header（默认）/ query / cookie / ip
 	Source string `mapstructure:"source" yaml:"source" json:"source"`
-	// Key 参数名：header 名 / query 参数名 / cookie 名
+	// Key 参数名：header 名 / query 参数名 / cookie 名；source=ip 时可留空
 	Key   string `mapstructure:"key" yaml:"key" json:"key"`
 	Regex string `mapstructure:"regex" yaml:"regex" json:"regex"`
 	Group int    `mapstructure:"group" yaml:"group" json:"group"`
@@ -232,13 +232,13 @@ func validateIdentityConfig(cfg *Config) error {
 			source = "header"
 		}
 		switch source {
-		case "header", "query", "cookie":
+		case "header", "query", "cookie", "ip":
 		default:
-			return fmt.Errorf("identity.extractors[%d].source 配置无效：%q，可选值为 header/query/cookie", i, extractor.Source)
+			return fmt.Errorf("identity.extractors[%d].source 配置无效：%q，可选值为 header/query/cookie/ip", i, extractor.Source)
 		}
 
 		key := strings.TrimSpace(extractor.Key)
-		if key == "" {
+		if source != "ip" && key == "" {
 			if source == "header" {
 				return fmt.Errorf("identity.extractors[%d].key 不能为空（source=header）", i)
 			}

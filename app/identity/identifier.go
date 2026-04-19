@@ -25,7 +25,7 @@ type Identifier struct {
 }
 
 type compiledExtractor struct {
-	source string // header / query / cookie
+	source string // header / query / cookie / ip
 	key    string
 	group  int
 	name   string
@@ -127,7 +127,10 @@ func (i *Identifier) extractValue(c *gin.Context, ex *compiledExtractor) (string
 }
 
 func (i *Identifier) readRaw(c *gin.Context, ex *compiledExtractor) string {
-	if c == nil || c.Request == nil || ex.key == "" {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	if ex.source != "ip" && ex.key == "" {
 		return ""
 	}
 	switch ex.source {
@@ -141,6 +144,8 @@ func (i *Identifier) readRaw(c *gin.Context, ex *compiledExtractor) string {
 			return ""
 		}
 		return value
+	case "ip":
+		return c.ClientIP()
 	default:
 		return ""
 	}
