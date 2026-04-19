@@ -3,6 +3,7 @@ package handler
 import (
 	"embed"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +18,17 @@ import (
 
 //go:embed adminui/index.html
 var adminUIFS embed.FS
+
+func formatDuration(d time.Duration) string {
+	if d == 0 {
+		return "0s"
+	}
+	sec := d.Seconds()
+	if sec == float64(int(sec)) {
+		return fmt.Sprintf("%ds", int(sec))
+	}
+	return d.String()
+}
 
 // AdminHandler 管理接口处理器
 type AdminHandler struct {
@@ -78,11 +90,12 @@ func (h *AdminHandler) GetSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"server": gin.H{
 			"port":         cfg.Server.Port,
-			"read_timeout": cfg.Server.ReadTimeout.String(),
-			"idle_timeout": cfg.Server.IdleTimeout.String(),
+			"read_timeout": formatDuration(cfg.Server.ReadTimeout),
+			"idle_timeout": formatDuration(cfg.Server.IdleTimeout),
 		},
 		"upstream": gin.H{
-			"target": cfg.Upstream.Target,
+			"target":           cfg.Upstream.Target,
+			"response_timeout": formatDuration(cfg.Upstream.ResponseTimeout),
 		},
 		"redis": gin.H{
 			"addr":             cfg.Redis.Addr,
@@ -295,7 +308,7 @@ func (h *AdminHandler) ResetQuota(c *gin.Context) {
 
 type editableConfig struct {
 	Server      editableServerConfig     `json:"server"`
-	Upstream    config.UpstreamConfig    `json:"upstream"`
+	Upstream    editableUpstreamConfig   `json:"upstream"`
 	Redis       editableRedisConfig      `json:"redis"`
 	Identity    config.IdentityConfig    `json:"identity"`
 	Quota       config.QuotaConfig       `json:"quota"`
@@ -310,6 +323,11 @@ type editableServerConfig struct {
 	IdleTimeout string `json:"idle_timeout"`
 }
 
+type editableUpstreamConfig struct {
+	Target          string `json:"target"`
+	ResponseTimeout string `json:"response_timeout"`
+}
+
 type editableRedisConfig struct {
 	Addr string `json:"addr"`
 	DB   int    `json:"db"`
@@ -319,10 +337,13 @@ func editableConfigFrom(cfg *config.Config) editableConfig {
 	return editableConfig{
 		Server: editableServerConfig{
 			Port:        cfg.Server.Port,
-			ReadTimeout: cfg.Server.ReadTimeout.String(),
-			IdleTimeout: cfg.Server.IdleTimeout.String(),
+			ReadTimeout: formatDuration(cfg.Server.ReadTimeout),
+			IdleTimeout: formatDuration(cfg.Server.IdleTimeout),
 		},
-		Upstream: cfg.Upstream,
+		Upstream: editableUpstreamConfig{
+			Target:          cfg.Upstream.Target,
+			ResponseTimeout: formatDuration(cfg.Upstream.ResponseTimeout),
+		},
 		Redis: editableRedisConfig{
 			Addr: cfg.Redis.Addr,
 			DB:   cfg.Redis.DB,
@@ -354,13 +375,21 @@ func (h *AdminHandler) bindEditableConfig(c *gin.Context) (*config.Config, error
 		return nil, errors.New("server.idle_timeout 格式不正确，应为如 120s、500ms、1m")
 	}
 
+	responseTimeout, err := time.ParseDuration(strings.TrimSpace(req.Upstream.ResponseTimeout))
+	if err != nil {
+		return nil, errors.New("upstream.response_timeout 格式不正确，应为如 120s、500ms、1m")
+	}
+
 	cfg := &config.Config{
 		Server: config.ServerConfig{
 			Port:        req.Server.Port,
 			ReadTimeout: readTimeout,
 			IdleTimeout: idleTimeout,
 		},
-		Upstream: req.Upstream,
+		Upstream: config.UpstreamConfig{
+			Target:          req.Upstream.Target,
+			ResponseTimeout: responseTimeout,
+		},
 		Redis: config.RedisConfig{
 			Addr:     req.Redis.Addr,
 			DB:       req.Redis.DB,
