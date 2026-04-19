@@ -47,9 +47,6 @@ func NewIdentifier(cfg *config.IdentityConfig) *Identifier {
 			source = "header"
 		}
 		key := strings.TrimSpace(extractor.Key)
-		if key == "" && source == "header" {
-			key = strings.TrimSpace(extractor.Header)
-		}
 
 		compiled := compiledExtractor{
 			source: source,

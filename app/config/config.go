@@ -51,12 +51,10 @@ type IdentityExtractorConfig struct {
 	// Source 取值来源：header（默认）/ query / cookie
 	Source string `mapstructure:"source" yaml:"source" json:"source"`
 	// Key 参数名：header 名 / query 参数名 / cookie 名
-	// 兼容旧配置：当 Source 为空或 header 时，若 Key 为空则退化为读取 Header 字段
-	Key    string `mapstructure:"key" yaml:"key" json:"key"`
-	Header string `mapstructure:"header" yaml:"header" json:"header"`
-	Regex  string `mapstructure:"regex" yaml:"regex" json:"regex"`
-	Group  int    `mapstructure:"group" yaml:"group" json:"group"`
-	Name   string `mapstructure:"name" yaml:"name" json:"name"`
+	Key   string `mapstructure:"key" yaml:"key" json:"key"`
+	Regex string `mapstructure:"regex" yaml:"regex" json:"regex"`
+	Group int    `mapstructure:"group" yaml:"group" json:"group"`
+	Name  string `mapstructure:"name" yaml:"name" json:"name"`
 }
 
 // IdentityConfig 身份识别配置
@@ -240,12 +238,9 @@ func validateIdentityConfig(cfg *Config) error {
 		}
 
 		key := strings.TrimSpace(extractor.Key)
-		if key == "" && source == "header" {
-			key = strings.TrimSpace(extractor.Header)
-		}
 		if key == "" {
 			if source == "header" {
-				return fmt.Errorf("identity.extractors[%d].header（或 key）不能为空", i)
+				return fmt.Errorf("identity.extractors[%d].key 不能为空（source=header）", i)
 			}
 			return fmt.Errorf("identity.extractors[%d].key 不能为空（source=%s）", i, source)
 		}
