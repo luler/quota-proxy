@@ -84,6 +84,7 @@ type QuotaRuleRequestMatchConfig struct {
 	QueryForm *RequestRegexMatchConfig `mapstructure:"query_form" yaml:"query_form" json:"query_form"`
 	JSONBody  *RequestRegexMatchConfig `mapstructure:"json_body" yaml:"json_body" json:"json_body"`
 	Headers   *RequestRegexMatchConfig `mapstructure:"headers" yaml:"headers" json:"headers"`
+	IP        *RequestRegexMatchConfig `mapstructure:"ip" yaml:"ip" json:"ip"`
 }
 
 // QuotaRuleConfig 路径配额规则
@@ -308,6 +309,9 @@ func validateRequestMatchRule(ruleName string, matcher *QuotaRuleRequestMatchCon
 		return err
 	}
 	if err := validateRegexMatcher(ruleName, "headers", matcher.Headers); err != nil {
+		return err
+	}
+	if err := validateRegexMatcher(ruleName, "ip", matcher.IP); err != nil {
 		return err
 	}
 

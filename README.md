@@ -162,9 +162,10 @@ admin:
 - `request_match.query_form`：先把 query 参数和 form 参数规范化为类似 `a=1&b=2` 的字符串，再用 regex 做 include/exclude 匹配
 - `request_match.json_body`：先把 JSON 请求体规范化为紧凑 JSON 字符串，再用 regex 做 include/exclude 匹配
 - `request_match.headers`：先把请求头规范化为按行拼接的 `name:value` 文本，再用 regex 做 include/exclude 匹配
+- `request_match.ip`：直接对 `gin.Context.ClientIP()` 的结果做 regex 的 include/exclude 匹配
 - 每个域内：`include` 非空时要求至少命中一个 regex；`exclude` 任一命中则该域失败
 - 优先级上可理解为：`exclude` 高于 `include`，即使已经命中 `include`，只要再命中任一 `exclude`，最终仍然失败
-- `request_match` 只支持新的 `query_form/json_body/headers + include/exclude` 结构
+- `request_match` 只支持新的 `query_form/json_body/headers/ip + include/exclude` 结构
 
 ### request_match 示例
 
@@ -181,6 +182,11 @@ request_match:
   headers:
     include:
       - '(^|\n)x-user-id:vip-user($|\n)'
+  ip:
+    include:
+      - '^10\.'
+    exclude:
+      - '^10\.0\.0\.1$'
 ```
 
 常见写法：
@@ -188,6 +194,10 @@ request_match:
 - 模糊匹配某个 query/form 片段：`foo`
 - 精确匹配参数对：`(^|&)foo=bar(&|$)`
 - 精确匹配 header 行：`(^|\n)x-user-id:vip-user($|\n)`
+- 匹配某个网段前缀：`^10\.`
+- 匹配固定 IP：`^192\.168\.1\.10$`
+
+`request_match.ip` 使用 `gin.Context.ClientIP()` 的结果做匹配；如果部署在 Nginx / LB / CDN 后面，是否拿到真实客户端 IP 取决于 Gin 的 trusted proxies 配置。
 
 ### 配额超限自定义返回
 

@@ -127,6 +127,7 @@ type compiledRuleMatcher struct {
 	queryForm *compiledRegexMatcher
 	jsonBody  *compiledRegexMatcher
 	headers   *compiledRegexMatcher
+	ip        *compiledRegexMatcher
 }
 
 // NewQuotaMiddleware 创建配额中间件
@@ -417,7 +418,7 @@ func (m *QuotaMiddleware) matchRule(c *gin.Context) *config.QuotaRuleConfig {
 
 func (m *QuotaMiddleware) matchRequest(rule *config.QuotaRuleConfig, c *gin.Context) bool {
 	matcher := m.matchers[rule.Name]
-	if matcher.queryForm == nil && matcher.jsonBody == nil && matcher.headers == nil {
+	if matcher.queryForm == nil && matcher.jsonBody == nil && matcher.headers == nil && matcher.ip == nil {
 		return true
 	}
 
@@ -438,6 +439,13 @@ func (m *QuotaMiddleware) matchRequest(rule *config.QuotaRuleConfig, c *gin.Cont
 	if matcher.headers != nil {
 		canonical := m.canonicalizeHeaders(c)
 		if !matchRegexDomain(canonical, matcher.headers) {
+			return false
+		}
+	}
+
+	if matcher.ip != nil {
+		canonical := m.canonicalizeIP(c)
+		if !matchRegexDomain(canonical, matcher.ip) {
 			return false
 		}
 	}
@@ -574,6 +582,13 @@ func (m *QuotaMiddleware) canonicalizeHeaders(c *gin.Context) string {
 	return cache.headers
 }
 
+func (m *QuotaMiddleware) canonicalizeIP(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	return c.ClientIP()
+}
+
 func matchRegexDomain(canonical string, matcher *compiledRegexMatcher) bool {
 	if matcher == nil {
 		return true
@@ -631,11 +646,16 @@ func compileRequestMatcher(cfg *config.QuotaRuleRequestMatchConfig) (compiledRul
 	if err != nil {
 		return compiledRuleMatcher{}, err
 	}
+	ip, err := compileRegexMatcher(cfg.IP)
+	if err != nil {
+		return compiledRuleMatcher{}, err
+	}
 
 	return compiledRuleMatcher{
 		queryForm: queryForm,
 		jsonBody:  jsonBody,
 		headers:   headers,
+		ip:        ip,
 	}, nil
 }
 

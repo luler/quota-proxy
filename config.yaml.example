@@ -115,6 +115,13 @@ quota:
         headers:
           include:
             - "(^|\\n)x-user-id:vip-user($|\\n)"
+        # 客户端 IP 使用 gin.Context.ClientIP() 结果做匹配
+        # 在 Nginx / LB / CDN 场景下，是否为真实客户端 IP 取决于 trusted proxies 配置
+        ip:
+          include:
+            - "^10\\."
+          exclude:
+            - "^10\\.0\\.0\\.1$"
       # 可选：配额超限后的自定义返回内容；不配置则使用默认 JSON
       # 设置为普通文本时返回纯文本
       # 设置为空字符串时返回 429 且不返回任何内容
