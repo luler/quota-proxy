@@ -1458,7 +1458,11 @@ async function confirmModalAction() {
   modalState.onConfirm = null;
   closeModal();
   if (typeof action === 'function') {
-    await action();
+    try {
+      await action();
+    } catch (err) {
+      showMessageModal(err.message || '操作失败', false, '操作失败');
+    }
   }
 }
 
