@@ -57,12 +57,14 @@ go run main.go serve
 # 服务配置
 server:
   port: 3000
-  read_timeout: 10s
-  write_timeout: 30s
+  read_timeout: 10s          # 读取请求头的最大时间，防 slowloris 攻击
+  idle_timeout: 120s         # keep-alive 空闲连接回收时间
+  max_body_size: 104857600   # 请求/响应 body 最大字节数 (100MB)
 
 # 上游服务配置
 upstream:
   target: http://localhost:8080  # 后端服务地址
+  response_timeout: 120s         # 等待上游返回响应头的最大时间（LLM 推理排队可能较长）
 
 # Redis 配置
 redis:
@@ -433,6 +435,34 @@ quota_exceeded_body: '{"code":42901,"message":"当前访问过于频繁"}'
 - 在状态码满足要求的前提下，SSE 在首个有效事件帧（包含 `data:`、`event:`、`id:` 或 `retry:` 字段）成功写给客户端并 flush 后计为
   1 次成功访问
 - 若在首个事件前上游失败、读取失败或客户端写出失败，则回滚本次预占，不扣次数
+
+### 超时与安全机制
+
+请求全生命周期内各超时配置的作用范围：
+
+```
+客户端 ──TCP──> 代理服务器 ──TCP──> 上游服务
+        │                  │
+        │  read_timeout    │  response_timeout
+        │  (请求头读取)     │  (等待响应头)
+        │                  │
+        │  idle_timeout    │  SSE 流传输：无超时限制
+        │  (空闲连接回收)   │
+        │                  │
+        │  max_body_size：请求/响应 body 大小上限
+        │
+```
+
+| 配置项 | 作用层 | 说明 |
+|--------|--------|------|
+| `server.read_timeout` | 入站（客户端→代理） | 读取请求头的最大时间，防止 slowloris 慢速攻击 |
+| `server.idle_timeout` | 入站（客户端→代理） | keep-alive 连接在两次请求之间的最大空闲时间 |
+| `server.max_body_size` | 入站 + 出站 | 请求/响应 body 的最大字节数，防止超大 body 导致内存溢出 |
+| `upstream.response_timeout` | 出站（代理→上游） | 等待上游返回响应头的最大时间，LLM 推理排队场景建议设为 120s 或更高 |
+
+注意事项：
+- SSE 流式传输不受任何写超时限制，流可以持续数分钟
+- `idle_timeout` 和 `response_timeout` 不冲突：前者管入站空闲连接回收，后者管出站等待上游响应
 
 ### TTL 自动过期
 

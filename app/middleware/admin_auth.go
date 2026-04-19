@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
@@ -29,7 +30,8 @@ func AdminAuth(store *RuntimeStore) gin.HandlerFunc {
 			return
 		}
 
-		if strings.TrimSpace(c.GetHeader("X-API-Key")) != apiKey {
+		provided := strings.TrimSpace(c.GetHeader("X-API-Key"))
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(apiKey)) != 1 {
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "管理密钥无效"})
 			c.Abort()
 			return

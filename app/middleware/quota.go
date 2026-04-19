@@ -137,7 +137,7 @@ func NewQuotaMiddleware(cfg *config.Config) (*QuotaMiddleware, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := proxy.NewReverseProxy(&cfg.Upstream)
+	p, err := proxy.NewReverseProxy(&cfg.Upstream, cfg.Server.MaxBodySize)
 	if err != nil {
 		return nil, err
 	}

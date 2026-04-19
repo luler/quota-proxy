@@ -77,9 +77,9 @@ func (h *AdminHandler) GetSummary(c *gin.Context) {
 	cfg := runtime.Config
 	c.JSON(http.StatusOK, gin.H{
 		"server": gin.H{
-			"port":          cfg.Server.Port,
-			"read_timeout":  cfg.Server.ReadTimeout.String(),
-			"write_timeout": cfg.Server.WriteTimeout.String(),
+			"port":         cfg.Server.Port,
+			"read_timeout": cfg.Server.ReadTimeout.String(),
+			"idle_timeout": cfg.Server.IdleTimeout.String(),
 		},
 		"upstream": gin.H{
 			"target": cfg.Upstream.Target,
@@ -305,9 +305,9 @@ type editableConfig struct {
 }
 
 type editableServerConfig struct {
-	Port         int    `json:"port"`
-	ReadTimeout  string `json:"read_timeout"`
-	WriteTimeout string `json:"write_timeout"`
+	Port        int    `json:"port"`
+	ReadTimeout string `json:"read_timeout"`
+	IdleTimeout string `json:"idle_timeout"`
 }
 
 type editableRedisConfig struct {
@@ -318,9 +318,9 @@ type editableRedisConfig struct {
 func editableConfigFrom(cfg *config.Config) editableConfig {
 	return editableConfig{
 		Server: editableServerConfig{
-			Port:         cfg.Server.Port,
-			ReadTimeout:  cfg.Server.ReadTimeout.String(),
-			WriteTimeout: cfg.Server.WriteTimeout.String(),
+			Port:        cfg.Server.Port,
+			ReadTimeout: cfg.Server.ReadTimeout.String(),
+			IdleTimeout: cfg.Server.IdleTimeout.String(),
 		},
 		Upstream: cfg.Upstream,
 		Redis: editableRedisConfig{
@@ -349,16 +349,16 @@ func (h *AdminHandler) bindEditableConfig(c *gin.Context) (*config.Config, error
 	if err != nil {
 		return nil, errors.New("server.read_timeout 格式不正确，应为如 10s、500ms、1m")
 	}
-	writeTimeout, err := time.ParseDuration(strings.TrimSpace(req.Server.WriteTimeout))
+	idleTimeout, err := time.ParseDuration(strings.TrimSpace(req.Server.IdleTimeout))
 	if err != nil {
-		return nil, errors.New("server.write_timeout 格式不正确，应为如 30s、500ms、1m")
+		return nil, errors.New("server.idle_timeout 格式不正确，应为如 120s、500ms、1m")
 	}
 
 	cfg := &config.Config{
 		Server: config.ServerConfig{
-			Port:         req.Server.Port,
-			ReadTimeout:  readTimeout,
-			WriteTimeout: writeTimeout,
+			Port:        req.Server.Port,
+			ReadTimeout: readTimeout,
+			IdleTimeout: idleTimeout,
 		},
 		Upstream: req.Upstream,
 		Redis: config.RedisConfig{

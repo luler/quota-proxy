@@ -3,6 +3,8 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"errors"
+	"fmt"
 	"gin_base/app/config"
 	"gin_base/app/helper/log_helper"
 	"io"
@@ -17,19 +19,32 @@ import (
 
 // ReverseProxy 反向代理
 type ReverseProxy struct {
-	target    *url.URL
-	transport *http.Transport
+	target      *url.URL
+	transport   *http.Transport
+	maxBodySize int64
 }
 
+var ErrBodyTooLarge = errors.New("body size exceeds limit")
+
 // NewReverseProxy 创建反向代理
-func NewReverseProxy(cfg *config.UpstreamConfig) (*ReverseProxy, error) {
+func NewReverseProxy(cfg *config.UpstreamConfig, maxBodySize int64) (*ReverseProxy, error) {
 	target, err := url.Parse(cfg.Target)
 	if err != nil {
 		return nil, err
 	}
 
+	if maxBodySize <= 0 {
+		maxBodySize = 100 << 20 // 100MB
+	}
+
+	responseTimeout := cfg.ResponseTimeout
+	if responseTimeout <= 0 {
+		responseTimeout = 120 * time.Second
+	}
+
 	return &ReverseProxy{
-		target: target,
+		target:      target,
+		maxBodySize: maxBodySize,
 		transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
@@ -41,7 +56,7 @@ func NewReverseProxy(cfg *config.UpstreamConfig) (*ReverseProxy, error) {
 			MaxIdleConnsPerHost:   100,
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
+			ResponseHeaderTimeout: responseTimeout,
 			ExpectContinueTimeout: 1 * time.Second,
 		},
 	}, nil
@@ -69,7 +84,12 @@ func (p *ReverseProxy) Do(c *gin.Context) (*http.Response, error) {
 	// 读取请求体
 	var bodyBytes []byte
 	if c.Request.Body != nil {
-		bodyBytes, _ = io.ReadAll(c.Request.Body)
+		lr := io.LimitReader(c.Request.Body, p.maxBodySize+1)
+		data, _ := io.ReadAll(lr)
+		if int64(len(data)) > p.maxBodySize {
+			return nil, fmt.Errorf("%w: request body exceeds %d bytes", ErrBodyTooLarge, p.maxBodySize)
+		}
+		bodyBytes = data
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	}
 
@@ -112,9 +132,13 @@ func (p *ReverseProxy) Do(c *gin.Context) (*http.Response, error) {
 func (p *ReverseProxy) ReadResponse(resp *http.Response) (*ProxyResult, error) {
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	lr := io.LimitReader(resp.Body, p.maxBodySize+1)
+	respBody, err := io.ReadAll(lr)
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(respBody)) > p.maxBodySize {
+		return nil, fmt.Errorf("%w: response body exceeds %d bytes", ErrBodyTooLarge, p.maxBodySize)
 	}
 
 	return &ProxyResult{

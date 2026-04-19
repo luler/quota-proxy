@@ -28,7 +28,10 @@ return {1, success, pending + 1}
 // KEYS[1]: quota key
 const ConfirmScript = `
 local key = KEYS[1]
-redis.call('HINCRBY', key, 'pending', -1)
+local pending = tonumber(redis.call('HGET', key, 'pending') or 0)
+if pending > 0 then
+	redis.call('HINCRBY', key, 'pending', -1)
+end
 redis.call('HINCRBY', key, 'success', 1)
 return 1
 `
@@ -37,7 +40,10 @@ return 1
 // KEYS[1]: quota key
 const RollbackScript = `
 local key = KEYS[1]
-redis.call('HINCRBY', key, 'pending', -1)
+local pending = tonumber(redis.call('HGET', key, 'pending') or 0)
+if pending > 0 then
+	redis.call('HINCRBY', key, 'pending', -1)
+end
 return 1
 `
 

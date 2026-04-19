@@ -151,7 +151,7 @@ func (i *Identifier) readRaw(c *gin.Context, ex *compiledExtractor) string {
 
 func (i *Identifier) fallback(c *gin.Context) string {
 	if i.config != nil && !i.config.FallbackToIP {
-		return "ip:" + c.ClientIP()
+		return ""
 	}
 	return "ip:" + c.ClientIP()
 }

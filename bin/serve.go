@@ -1,10 +1,14 @@
 package bin
 
 import (
+	"context"
 	"fmt"
 	"gin_base/app/config"
 	"gin_base/route"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
@@ -52,8 +56,28 @@ func StartServer() {
 	fmt.Printf("配额中间件服务启动，监听端口: %s\n", port)
 	fmt.Printf("上游服务地址: %s\n", cfg.Upstream.Target)
 
-	if err := engine.Run(":" + port); err != nil {
-		fmt.Println("服务启动失败:", err)
-		os.Exit(1)
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           engine,
+		ReadHeaderTimeout: cfg.Server.ReadTimeout,
+		IdleTimeout:       cfg.Server.IdleTimeout,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Println("服务启动失败:", err)
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	fmt.Println("正在关闭服务...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ReadTimeout)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		fmt.Println("服务关闭异常:", err)
 	}
 }

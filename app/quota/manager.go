@@ -2,6 +2,7 @@ package quota
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -64,9 +65,13 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 	}
 
 	client := redis.NewClient(&redis.Options{
-		Addr:     cfg.Redis.Addr,
-		Password: cfg.Redis.Password,
-		DB:       cfg.Redis.DB,
+		Addr:         cfg.Redis.Addr,
+		Password:     cfg.Redis.Password,
+		DB:           cfg.Redis.DB,
+		MaxRetries:   2,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -433,7 +438,7 @@ func (m *Manager) ListRuleNames() []string {
 
 // IsRedisError 判断是否为 Redis 错误
 func (m *Manager) IsRedisError(err error) bool {
-	return err != nil && err != redis.Nil
+	return err != nil && !errors.Is(err, redis.Nil)
 }
 
 // IsFailOpen 是否为 fail-open 模式

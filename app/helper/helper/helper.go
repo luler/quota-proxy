@@ -7,7 +7,6 @@ import (
 
 // 格式化日期时间
 func LocalTimeFormat(t time.Time) string {
-	// 从环境变量读取时区，默认为Asia/Shanghai
 	tz := os.Getenv("TZ")
 	if tz == "" {
 		tz = "Asia/Shanghai"
@@ -15,11 +14,9 @@ func LocalTimeFormat(t time.Time) string {
 
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
-		// 如果加载失败，使用UTC+8
 		loc = time.FixedZone("CST", 8*3600)
 	}
-	time.Local = loc
-	return t.In(time.Local).Format("2006-01-02 15:04:05")
+	return t.In(loc).Format("2006-01-02 15:04:05")
 }
 
 // 过滤map[string]interface{}类型的数据

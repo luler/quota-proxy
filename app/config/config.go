@@ -26,14 +26,16 @@ type Config struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Port         int           `mapstructure:"port" yaml:"port" json:"port"`
-	ReadTimeout  time.Duration `mapstructure:"read_timeout" yaml:"read_timeout" json:"read_timeout"`
-	WriteTimeout time.Duration `mapstructure:"write_timeout" yaml:"write_timeout" json:"write_timeout"`
+	Port        int           `mapstructure:"port" yaml:"port" json:"port"`
+	ReadTimeout time.Duration `mapstructure:"read_timeout" yaml:"read_timeout" json:"read_timeout"`
+	IdleTimeout time.Duration `mapstructure:"idle_timeout" yaml:"idle_timeout" json:"idle_timeout"`
+	MaxBodySize int64         `mapstructure:"max_body_size" yaml:"max_body_size" json:"max_body_size"`
 }
 
 // UpstreamConfig 上游服务配置
 type UpstreamConfig struct {
-	Target string `mapstructure:"target" yaml:"target" json:"target"`
+	Target          string        `mapstructure:"target" yaml:"target" json:"target"`
+	ResponseTimeout time.Duration `mapstructure:"response_timeout" yaml:"response_timeout" json:"response_timeout"`
 }
 
 // RedisConfig Redis 配置
@@ -336,10 +338,12 @@ func setDefaults(v *viper.Viper) {
 	// Server
 	v.SetDefault("server.port", 3000)
 	v.SetDefault("server.read_timeout", "10s")
-	v.SetDefault("server.write_timeout", "30s")
+	v.SetDefault("server.idle_timeout", "120s")
+	v.SetDefault("server.max_body_size", 104857600)
 
 	// Upstream
 	v.SetDefault("upstream.target", "http://localhost:8080")
+	v.SetDefault("upstream.response_timeout", "120s")
 
 	// Redis
 	v.SetDefault("redis.addr", "localhost:6379")

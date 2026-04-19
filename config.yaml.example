@@ -3,12 +3,14 @@
 # 服务配置
 server:
   port: 3000
-  read_timeout: 10s
-  write_timeout: 30s
+  read_timeout: 10s          # 读取请求头的最大时间，防 slowloris 攻击
+  idle_timeout: 120s         # keep-alive 空闲连接回收时间
+  max_body_size: 104857600   # 请求/响应 body 最大字节数 (100MB)
 
 # 上游服务配置
 upstream:
   target: https://fastgpt.luler.top:443
+  response_timeout: 120s     # 等待上游返回响应头的最大时间
 
 # Redis 配置
 redis:

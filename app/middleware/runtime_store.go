@@ -3,6 +3,7 @@ package middleware
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"gin_base/app/config"
 
@@ -46,7 +47,10 @@ func (s *RuntimeStore) Reload(cfg *config.Config) error {
 	s.current.Store(next)
 
 	if prev != nil && prev.QuotaMiddleware != nil {
-		_ = prev.QuotaMiddleware.Close()
+		go func(old *QuotaMiddleware) {
+			time.Sleep(30 * time.Second)
+			_ = old.Close()
+		}(prev.QuotaMiddleware)
 	}
 
 	return nil
