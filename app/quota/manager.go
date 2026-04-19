@@ -27,6 +27,7 @@ type ActiveQuotaRow struct {
 	RuleName     string `json:"rule_name"`
 	Success      int    `json:"success_count"`
 	Pending      int    `json:"pending_count"`
+	Rejected429  int    `json:"rejected_429_count"`
 	Limit        int    `json:"limit"`
 	Remaining    int    `json:"remaining"`
 	Window       string `json:"window"`
@@ -43,6 +44,7 @@ type QuotaStatus struct {
 	RuleName    string `json:"rule_name"`
 	Success     int    `json:"success_count"`
 	Pending     int    `json:"pending_count"`
+	Rejected429 int    `json:"rejected_429_count"`
 	Limit       int    `json:"limit"`
 	Remaining   int    `json:"remaining"`
 	Window      string `json:"window"`
@@ -172,26 +174,27 @@ func (m *Manager) getPeriodKey(rule *config.QuotaRuleConfig) string {
 }
 
 // TryReserve 尝试预占名额
-func (m *Manager) TryReserve(rule *config.QuotaRuleConfig, identity string) (bool, int, int, error) {
+func (m *Manager) TryReserve(rule *config.QuotaRuleConfig, identity string) (bool, int, int, int, error) {
 	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
 	ttl := m.getPeriodTTL(rule)
 
 	ctx := context.Background()
 	result, err := m.client.Eval(ctx, TryReserveScript, []string{key}, rule.SuccessLimit, ttl).Result()
 	if err != nil {
-		return false, 0, 0, err
+		return false, 0, 0, 0, err
 	}
 
 	res, ok := result.([]interface{})
-	if !ok || len(res) != 3 {
-		return false, 0, 0, fmt.Errorf("invalid redis result")
+	if !ok || len(res) != 4 {
+		return false, 0, 0, 0, fmt.Errorf("invalid redis result")
 	}
 
 	successFlag := res[0].(int64) == 1
 	successCount := int(res[1].(int64))
 	pendingCount := int(res[2].(int64))
+	rejected429Count := int(res[3].(int64))
 
-	return successFlag, successCount, pendingCount, nil
+	return successFlag, successCount, pendingCount, rejected429Count, nil
 }
 
 // Confirm 确认成功
@@ -242,12 +245,13 @@ func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string)
 	}
 
 	res, ok := result.([]interface{})
-	if !ok || len(res) != 2 {
+	if !ok || len(res) != 3 {
 		return nil, fmt.Errorf("invalid redis result")
 	}
 
 	successCount := int(res[0].(int64))
 	pendingCount := int(res[1].(int64))
+	rejected429Count := int(res[2].(int64))
 	remaining := rule.SuccessLimit - successCount
 	if remaining < 0 {
 		remaining = 0
@@ -257,6 +261,7 @@ func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string)
 		RuleName:    rule.Name,
 		Success:     successCount,
 		Pending:     pendingCount,
+		Rejected429: rejected429Count,
 		Limit:       rule.SuccessLimit,
 		Remaining:   remaining,
 		Window:      formatWindow(rule),
@@ -344,6 +349,7 @@ func (m *Manager) ListActiveStatuses(identityFilter, ruleFilter string, page, pa
 				RuleName:     status.RuleName,
 				Success:      status.Success,
 				Pending:      status.Pending,
+				Rejected429:  status.Rejected429,
 				Limit:        status.Limit,
 				Remaining:    status.Remaining,
 				Window:       status.Window,

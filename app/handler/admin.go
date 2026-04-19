@@ -160,15 +160,16 @@ func (h *AdminHandler) GetQuota(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
-		"identity":      identity,
-		"rule":          status.RuleName,
-		"window":        status.Window,
-		"period_key":    status.PeriodKey,
-		"success_count": status.Success,
-		"pending_count": status.Pending,
-		"limit":         status.Limit,
-		"remaining":     status.Remaining,
-		"rules":         manager.ListRuleNames(),
+		"identity":           identity,
+		"rule":               status.RuleName,
+		"window":             status.Window,
+		"period_key":         status.PeriodKey,
+		"success_count":      status.Success,
+		"pending_count":      status.Pending,
+		"rejected_429_count": status.Rejected429,
+		"limit":              status.Limit,
+		"remaining":          status.Remaining,
+		"rules":              manager.ListRuleNames(),
 	})
 }
 
@@ -314,13 +315,14 @@ type editableConfig struct {
 	Quota       config.QuotaConfig       `json:"quota"`
 	SuccessRule config.SuccessRuleConfig `json:"success_rule"`
 	Logging     config.LoggingConfig     `json:"logging"`
-	Admin       config.AdminConfig       `json:"admin"`
+	Admin       editableAdminConfig      `json:"admin"`
 }
 
 type editableServerConfig struct {
 	Port        int    `json:"port"`
 	ReadTimeout string `json:"read_timeout"`
 	IdleTimeout string `json:"idle_timeout"`
+	MaxBodySize int64  `json:"max_body_size"`
 }
 
 type editableUpstreamConfig struct {
@@ -329,8 +331,13 @@ type editableUpstreamConfig struct {
 }
 
 type editableRedisConfig struct {
-	Addr string `json:"addr"`
-	DB   int    `json:"db"`
+	Addr     string `json:"addr"`
+	Password string `json:"password"`
+	DB       int    `json:"db"`
+}
+
+type editableAdminConfig struct {
+	APIKey string `json:"api_key"`
 }
 
 func editableConfigFrom(cfg *config.Config) editableConfig {
@@ -339,20 +346,24 @@ func editableConfigFrom(cfg *config.Config) editableConfig {
 			Port:        cfg.Server.Port,
 			ReadTimeout: formatDuration(cfg.Server.ReadTimeout),
 			IdleTimeout: formatDuration(cfg.Server.IdleTimeout),
+			MaxBodySize: cfg.Server.MaxBodySize,
 		},
 		Upstream: editableUpstreamConfig{
 			Target:          cfg.Upstream.Target,
 			ResponseTimeout: formatDuration(cfg.Upstream.ResponseTimeout),
 		},
 		Redis: editableRedisConfig{
-			Addr: cfg.Redis.Addr,
-			DB:   cfg.Redis.DB,
+			Addr:     cfg.Redis.Addr,
+			Password: cfg.Redis.Password,
+			DB:       cfg.Redis.DB,
 		},
 		Identity:    cfg.Identity,
 		Quota:       cfg.Quota,
 		SuccessRule: cfg.SuccessRule,
 		Logging:     cfg.Logging,
-		Admin:       cfg.Admin,
+		Admin: editableAdminConfig{
+			APIKey: cfg.Admin.APIKey,
+		},
 	}
 }
 
@@ -385,6 +396,7 @@ func (h *AdminHandler) bindEditableConfig(c *gin.Context) (*config.Config, error
 			Port:        req.Server.Port,
 			ReadTimeout: readTimeout,
 			IdleTimeout: idleTimeout,
+			MaxBodySize: req.Server.MaxBodySize,
 		},
 		Upstream: config.UpstreamConfig{
 			Target:          req.Upstream.Target,
@@ -392,14 +404,16 @@ func (h *AdminHandler) bindEditableConfig(c *gin.Context) (*config.Config, error
 		},
 		Redis: config.RedisConfig{
 			Addr:     req.Redis.Addr,
+			Password: req.Redis.Password,
 			DB:       req.Redis.DB,
-			Password: current.Config.Redis.Password,
 		},
 		Identity:    req.Identity,
 		Quota:       req.Quota,
 		SuccessRule: req.SuccessRule,
 		Logging:     req.Logging,
-		Admin:       req.Admin,
+		Admin: config.AdminConfig{
+			APIKey: req.Admin.APIKey,
+		},
 	}
 	return cfg, nil
 }

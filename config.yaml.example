@@ -116,7 +116,7 @@ quota:
       # 设置为普通文本时返回纯文本
       # 设置为空字符串时返回 429 且不返回任何内容
       # 若文本本身是合法 JSON，则按 JSON 返回
-      quota_exceeded_body: 请求过于频繁，请稍后再试
+      quota_exceeded_body: '{"code": 429, "message": "请求过于频繁，请稍后再试", "error": "请求过于频繁，请稍后再试"}'
 
     # 示例：空响应体
     - name: other-api-hourly

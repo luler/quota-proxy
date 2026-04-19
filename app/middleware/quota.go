@@ -184,7 +184,7 @@ func (m *QuotaMiddleware) Handler() gin.HandlerFunc {
 		}
 
 		ident := m.identifier.Identify(c)
-		reserved, successCount, pendingCount, err := m.manager.TryReserve(rule, ident)
+		reserved, successCount, pendingCount, rejected429Count, err := m.manager.TryReserve(rule, ident)
 		if err != nil {
 			if m.manager.IsFailOpen() {
 				log_helper.Error("Redis error, fail-open mode", "error", err)
@@ -200,7 +200,8 @@ func (m *QuotaMiddleware) Handler() gin.HandlerFunc {
 				"rule", rule.Name,
 				"identity", ident,
 				"success", successCount,
-				"pending", pendingCount)
+				"pending", pendingCount,
+				"rejected_429", rejected429Count)
 			m.respondQuotaExceeded(c, rule)
 			return
 		}

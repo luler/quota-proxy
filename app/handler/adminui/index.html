@@ -1069,6 +1069,7 @@
               <th>规则</th>
               <th class="num">成功次数</th>
               <th class="num">待确认</th>
+              <th class="num">429拒绝次数</th>
               <th class="num">剩余额度</th>
               <th class="short">窗口</th>
               <th>周期键</th>
@@ -1102,7 +1103,7 @@
         <div class="editor-wrap">
           <div class="editor-head">
             <strong>当前配置</strong>
-            <span>JSON 格式 · 可直接编辑</span>
+            <span>JSON 格式 · 全部字段可见可编辑（含敏感字段）</span>
           </div>
           <textarea id="configEditor" spellcheck="false"></textarea>
         </div>
@@ -1538,7 +1539,7 @@ function renderQuotas(data) {
   const hasSelected = items.some(item => item.identity === selectedQuota?.identity && item.rule_name === selectedQuota?.rule);
   if (!items.length) {
     clearDetailSelection();
-    tbody.innerHTML = '<tr><td colspan="9" class="empty">当前条件下没有活跃额度记录。</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">当前条件下没有活跃额度记录。</td></tr>';
     return;
   }
   if (!hasSelected && selectedQuota) {
@@ -1555,6 +1556,7 @@ function renderQuotas(data) {
       <td data-label="规则">${escapeHTML(item.rule_name)}</td>
       <td class="num" data-label="成功次数">${escapeHTML(item.success_count)}</td>
       <td class="num" data-label="待确认">${escapeHTML(item.pending_count)}</td>
+      <td class="num" data-label="429拒绝次数">${escapeHTML(item.rejected_429_count ?? 0)}</td>
       <td class="num" data-label="剩余额度">${escapeHTML(item.remaining)} / ${escapeHTML(item.limit)}</td>
       <td class="short" data-label="窗口">${escapeHTML(item.window)} × ${escapeHTML(item.window_count)}</td>
       <td data-label="周期键"><span class="mono">${escapeHTML(item.period_key)}</span></td>

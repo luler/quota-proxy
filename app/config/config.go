@@ -41,7 +41,7 @@ type UpstreamConfig struct {
 // RedisConfig Redis 配置
 type RedisConfig struct {
 	Addr     string `mapstructure:"addr" yaml:"addr" json:"addr"`
-	Password string `mapstructure:"password" yaml:"password" json:"password,omitempty"`
+	Password string `mapstructure:"password" yaml:"password" json:"password"`
 	DB       int    `mapstructure:"db" yaml:"db" json:"db"`
 }
 
@@ -115,7 +115,7 @@ type LoggingConfig struct {
 
 // AdminConfig 管理面板配置
 type AdminConfig struct {
-	APIKey string `mapstructure:"api_key" yaml:"api_key" json:"api_key,omitempty"`
+	APIKey string `mapstructure:"api_key" yaml:"api_key" json:"api_key"`
 }
 
 var appConfig *Config
@@ -272,7 +272,13 @@ func validateIdentityConfig(cfg *Config) error {
 }
 
 func validateQuotaRules(cfg *Config) error {
+	names := make(map[string]struct{}, len(cfg.Quota.Rules))
 	for _, rule := range cfg.Quota.Rules {
+		if _, exists := names[rule.Name]; exists {
+			return fmt.Errorf("invalid quota.rules[%s].name: duplicate rule name", rule.Name)
+		}
+		names[rule.Name] = struct{}{}
+
 		switch strings.ToLower(rule.Window) {
 		case "minute", "hour", "day":
 		default:
