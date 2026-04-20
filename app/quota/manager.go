@@ -285,6 +285,26 @@ func (m *Manager) Reset(ruleName string, identity string) error {
 	return m.resetByRule(rule, identity)
 }
 
+// Reject 耗尽剩余额度
+func (m *Manager) Reject(ruleName string, identity string) error {
+	rule := m.GetRule(ruleName)
+	if rule == nil {
+		return fmt.Errorf("%w: %s", ErrRuleNotFound, ruleName)
+	}
+
+	return m.rejectByRule(rule, identity)
+}
+
+// RejectAll 耗尽所有规则的剩余额度
+func (m *Manager) RejectAll(identity string) error {
+	for i := range m.config.Rules {
+		if err := m.rejectByRule(&m.config.Rules[i], identity); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ResetAll 重置所有规则配额
 func (m *Manager) ResetAll(identity string) error {
 	for i := range m.config.Rules {
@@ -293,6 +313,14 @@ func (m *Manager) ResetAll(identity string) error {
 		}
 	}
 	return nil
+}
+
+func (m *Manager) rejectByRule(rule *config.QuotaRuleConfig, identity string) error {
+	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
+	ttl := m.getPeriodTTL(rule)
+	ctx := context.Background()
+	_, err := m.client.Eval(ctx, RejectScript, []string{key}, rule.SuccessLimit, ttl).Result()
+	return err
 }
 
 func (m *Manager) resetByRule(rule *config.QuotaRuleConfig, identity string) error {

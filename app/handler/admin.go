@@ -308,6 +308,54 @@ func (h *AdminHandler) ResetQuota(c *gin.Context) {
 	})
 }
 
+// RejectQuota 耗尽剩余额度
+func (h *AdminHandler) RejectQuota(c *gin.Context) {
+	manager := h.currentManager(c)
+	if manager == nil {
+		return
+	}
+
+	var req struct {
+		Identity string `json:"identity" binding:"required"`
+		Rule     string `json:"rule"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{
+			"code":    400,
+			"message": "identity 参数必填",
+		})
+		return
+	}
+
+	if req.Rule == "" {
+		if err := manager.RejectAll(req.Identity); err != nil {
+			h.respondManagerError(c, "拒绝额度失败", err)
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"code":     200,
+			"message":  "所有额度已拒绝",
+			"identity": req.Identity,
+			"rules":    manager.ListRuleNames(),
+		})
+		return
+	}
+
+	if err := manager.Reject(req.Rule, req.Identity); err != nil {
+		h.respondManagerError(c, "拒绝额度失败", err)
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"code":     200,
+		"message":  "额度已拒绝",
+		"identity": req.Identity,
+		"rule":     req.Rule,
+	})
+}
+
 type editableConfig struct {
 	Server      editableServerConfig     `json:"server"`
 	Upstream    editableUpstreamConfig   `json:"upstream"`

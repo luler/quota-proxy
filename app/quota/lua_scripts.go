@@ -60,6 +60,20 @@ local rejected429 = tonumber(redis.call('HGET', key, 'rejected_429') or 0)
 return {success, pending, rejected429}
 `
 
+// RejectScript 耗尽剩余额度脚本
+// KEYS[1]: quota key
+// ARGV[1]: limit
+// ARGV[2]: ttl (seconds)
+const RejectScript = `
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local ttl = tonumber(ARGV[2])
+redis.call('HSET', key, 'success', limit)
+redis.call('HSET', key, 'pending', 0)
+redis.call('EXPIRE', key, ttl)
+return 1
+`
+
 // ResetScript 重置配额脚本
 // KEYS[1]: quota key
 const ResetScript = `

@@ -592,6 +592,8 @@
     button.secondary:hover { background: #334155; }
     button.danger { background: var(--danger); }
     button.danger:hover { background: var(--danger-hover); }
+    button.warn { background: #f59e0b; }
+    button.warn:hover { background: #d97706; }
     button.ghost {
       background: var(--primary-soft);
       color: var(--primary-strong);
@@ -675,6 +677,11 @@
       width: 90px;
     }
 
+    td.metric-success { color: var(--success); font-weight: 700; }
+    td.metric-pending { color: #d97706; font-weight: 700; }
+    td.metric-reject { color: var(--danger); font-weight: 700; }
+    td.metric-remaining { color: #2563eb; font-weight: 700; }
+
     th.short, td.short {
       white-space: nowrap;
       width: 120px;
@@ -682,7 +689,7 @@
 
     th.action-col, td.action-col {
       white-space: nowrap;
-      width: 160px;
+      width: 220px;
     }
 
     td.action-col .actions {
@@ -692,9 +699,9 @@
     }
 
     td.action-col .actions button {
-      min-width: 64px;
-      padding: 7px 10px;
-      font-size: 12.5px;
+      min-width: 52px;
+      padding: 5px 8px;
+      font-size: 12px;
     }
 
     tbody tr { transition: background-color .1s ease; }
@@ -1069,7 +1076,7 @@
               <th>规则</th>
               <th class="num">成功次数</th>
               <th class="num">待确认</th>
-              <th class="num">429拒绝次数</th>
+              <th class="num">拒绝次数</th>
               <th class="num">剩余额度</th>
               <th class="short">窗口</th>
               <th>周期键</th>
@@ -1555,21 +1562,21 @@ function renderQuotas(data) {
 
   tbody.innerHTML = '';
   for (const item of items) {
-    const isSelected = item.identity === selectedQuota?.identity && item.rule_name === selectedQuota?.rule;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td data-label="标识"><span class="mono">${escapeHTML(item.identity)}</span></td>
       <td class="short" data-label="类型"><span class="pill">${escapeHTML(item.identity_type)}</span></td>
       <td data-label="规则">${escapeHTML(item.rule_name)}</td>
-      <td class="num" data-label="成功次数">${escapeHTML(item.success_count)}</td>
-      <td class="num" data-label="待确认">${escapeHTML(item.pending_count)}</td>
-      <td class="num" data-label="429拒绝次数">${escapeHTML(item.rejected_429_count ?? 0)}</td>
-      <td class="num" data-label="剩余额度">${escapeHTML(item.remaining)} / ${escapeHTML(item.limit)}</td>
+      <td class="num metric-success" data-label="成功次数">${escapeHTML(item.success_count)}</td>
+      <td class="num metric-pending" data-label="待确认">${escapeHTML(item.pending_count)}</td>
+      <td class="num metric-reject" data-label="拒绝次数">${escapeHTML(item.rejected_429_count ?? 0)}</td>
+      <td class="num metric-remaining" data-label="剩余额度">${escapeHTML(item.remaining)} / ${escapeHTML(item.limit)}</td>
       <td class="short" data-label="窗口">${escapeHTML(item.window)} × ${escapeHTML(item.window_count)}</td>
       <td data-label="周期键"><span class="mono">${escapeHTML(item.period_key)}</span></td>
       <td class="action-col" data-label="操作">
         <div class="actions">
-          <button class="ghost" type="button" onclick='selectQuota(${JSON.stringify(item.identity)}, ${JSON.stringify(item.rule_name)})'>${isSelected ? '已选中' : '查看详情'}</button>
+          <button class="ghost" type="button" onclick='selectQuota(${JSON.stringify(item.identity)}, ${JSON.stringify(item.rule_name)})'>查看详情</button>
+          <button class="warn" type="button" onclick='rejectQuota(${JSON.stringify(item.identity)}, ${JSON.stringify(item.rule_name)})'>拒绝</button>
           <button class="danger" type="button" onclick='resetQuota(${JSON.stringify(item.identity)}, ${JSON.stringify(item.rule_name)})'>重置</button>
         </div>
       </td>`;
@@ -1614,6 +1621,29 @@ async function loadQuotaDetail() {
     : `identity=${encodeURIComponent(identity)}`;
   const data = await request(`/__admin/quota?${query}`);
   showQuotaDetailModal(data, identity, rule);
+}
+
+async function rejectQuota(identityArg, ruleArg) {
+  switchTab('overview');
+  if (typeof identityArg !== 'undefined') {
+    setSelectedQuota(identityArg, ruleArg || '');
+  }
+  const { identity, rule } = getSelectedQuota();
+  if (!identity) {
+    setStatus('请先在列表中选择一条要拒绝的额度记录。', false, '未选择记录');
+    return;
+  }
+  const confirmText = rule
+    ? `确认拒绝标识 ${identity} 在规则 ${rule} 下的剩余额度吗？`
+    : `确认拒绝标识 ${identity} 在全部规则下的剩余额度吗？`;
+  showConfirmModal(confirmText, async () => {
+    const data = await request('/__admin/quota/reject', {
+      method: 'POST',
+      body: JSON.stringify({ identity, rule })
+    });
+    await loadQuotas(true);
+    showMessageModal(data.message || '额度已拒绝。', true, '拒绝成功');
+  }, '确认拒绝');
 }
 
 async function resetQuota(identityArg, ruleArg) {

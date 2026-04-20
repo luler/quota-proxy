@@ -42,6 +42,7 @@ func InitRouter(e *gin.Engine, cfg *config.Config) error {
 		adminProtected.POST("/config/reload", adminHandler.ReloadConfig)
 		adminProtected.GET("/quota", adminHandler.GetQuota)
 		adminProtected.POST("/quota/reset", adminHandler.ResetQuota)
+		adminProtected.POST("/quota/reject", adminHandler.RejectQuota)
 	}
 
 	// 配额中间件处理所有其他请求
@@ -49,4 +50,3 @@ func InitRouter(e *gin.Engine, cfg *config.Config) error {
 
 	return nil
 }
-
