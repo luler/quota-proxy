@@ -1,1569 +1,1996 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f172a" />
-  <title>quota-proxy 管理面板</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #eef2fb;
-      --bg-grad: radial-gradient(1200px 600px at 10% -10%, #dbe6ff 0%, transparent 60%),
-                 radial-gradient(900px 500px at 110% 10%, #e9dffc 0%, transparent 60%),
-                 linear-gradient(180deg, #eef2fb 0%, #f4f7fb 100%);
-      --panel: #ffffff;
-      --panel-soft: #f7f9fd;
-      --panel-strong: #ffffff;
-      --border: #e3e9f4;
-      --border-strong: #cfd8e8;
-      --text: #0f172a;
-      --text-soft: #5b6b87;
-      --text-muted: #8593ac;
-      --primary: #4f46e5;
-      --primary-strong: #4338ca;
-      --primary-soft: #eef0ff;
-      --accent: #0ea5e9;
-      --danger: #dc2626;
-      --danger-hover: #b91c1c;
-      --success: #059669;
-      --success-bg: #ecfdf5;
-      --success-text: #065f46;
-      --error-bg: #fef2f2;
-      --error-text: #b42318;
-      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.04);
-      --shadow: 0 10px 30px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.04);
-      --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.18);
-      --radius-lg: 20px;
-      --radius: 14px;
-      --radius-sm: 10px;
-      --gradient-primary: linear-gradient(135deg, #6366f1 0%, #4338ca 50%, #2563eb 100%);
-      --gradient-hero: linear-gradient(135deg, #0f172a 0%, #1e2a5a 55%, #2f3d88 100%);
-    }
-
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; }
-
-    html { -webkit-text-size-adjust: 100%; }
-
-    body {
-      min-height: 100vh;
-      font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, Arial, sans-serif;
-      background: var(--bg);
-      background-image: var(--bg-grad);
-      background-attachment: fixed;
-      color: var(--text);
-      line-height: 1.55;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    header {
-      background: var(--gradient-hero);
-      color: #fff;
-      padding: 28px 24px 26px;
-      position: relative;
-      overflow: hidden;
-      border-bottom: 1px solid rgba(255,255,255,.06);
-    }
-
-    header::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(600px 240px at 80% 0%, rgba(99, 102, 241, 0.35) 0%, transparent 65%);
-      pointer-events: none;
-    }
-
-    .header-inner,
-    main {
-      max-width: 1360px;
-      margin: 0 auto;
-    }
-
-    .header-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      position: relative;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      min-width: 0;
-    }
-
-    .brand-badge {
-      width: 44px;
-      height: 44px;
-      flex: 0 0 auto;
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(255,255,255,.28), rgba(255,255,255,.08));
-      border: 1px solid rgba(255,255,255,.22);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
-    }
-
-    .brand-badge svg {
-      width: 22px;
-      height: 22px;
-      color: #fff;
-    }
-
-    header h1 {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 0.2px;
-      line-height: 1.2;
-    }
-
-    .sub {
-      margin-top: 3px;
-      font-size: 13px;
-      color: rgba(255,255,255,.72);
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .auth-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.08);
-      font-size: 13px;
-      font-weight: 600;
-      white-space: nowrap;
-      backdrop-filter: blur(6px);
-    }
-
-    .auth-status::before {
-      content: "";
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: #f59e0b;
-      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
-    }
-
-    .auth-status.ok::before {
-      background: #22c55e;
-      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22);
-    }
-
-    button.header-btn {
-      background: rgba(255,255,255,.12);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,.2);
-      padding: 8px 14px;
-      border-radius: 999px;
-      font-weight: 600;
-      font-size: 13px;
-      backdrop-filter: blur(6px);
-    }
-
-    button.header-btn:hover {
-      background: rgba(255,255,255,.2);
-    }
-
-    main {
-      padding: 22px 16px 40px;
-      display: grid;
-      gap: 18px;
-    }
-
-    .auth-shell {
-      min-height: calc(100vh - 220px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px 4px;
-    }
-
-    .auth-shell[hidden] { display: none !important; }
-
-    .auth-card {
-      width: min(440px, 100%);
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 28px 26px 24px;
-      box-shadow: var(--shadow);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .auth-card::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: var(--gradient-primary);
-    }
-
-    .auth-logo {
-      width: 54px;
-      height: 54px;
-      border-radius: 16px;
-      background: var(--gradient-primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 16px;
-      box-shadow: 0 12px 30px rgba(79, 70, 229, 0.28);
-    }
-
-    .auth-logo svg {
-      width: 24px;
-      height: 24px;
-      color: #fff;
-    }
-
-    .auth-title {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .auth-desc {
-      margin: 6px 0 18px;
-      font-size: 13px;
-      color: var(--text-soft);
-      line-height: 1.6;
-    }
-
-    .auth-stack {
-      display: grid;
-      gap: 14px;
-    }
-
-    .auth-error {
-      padding: 11px 14px;
-      border-radius: var(--radius-sm);
-      background: var(--error-bg);
-      color: var(--error-text);
-      border: 1px solid rgba(180, 35, 24, 0.15);
-      font-size: 13px;
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-    }
-
-    .auth-error::before {
-      content: "!";
-      flex: 0 0 auto;
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      background: currentColor;
-      color: var(--error-bg);
-      font-size: 12px;
-      font-weight: 800;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 1px;
-    }
-
-    .auth-error:empty { display: none; }
-
-    .auth-submit {
-      width: 100%;
-      background: var(--gradient-primary);
-      padding: 12px 16px;
-      font-weight: 700;
-      font-size: 14px;
-      letter-spacing: 0.2px;
-      box-shadow: 0 10px 26px rgba(79, 70, 229, 0.3);
-    }
-
-    .auth-submit:hover { filter: brightness(1.05); }
-    .auth-submit:disabled { opacity: .7; cursor: progress; }
-
-    .modal-mask {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.48);
-      backdrop-filter: blur(4px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      z-index: 1000;
-      animation: fadeIn .16s ease;
-    }
-
-    .modal-mask.show { display: flex; }
-
-    .modal {
-      width: min(920px, 100%);
-      max-height: calc(100vh - 40px);
-      overflow: hidden;
-      border-radius: 18px;
-      border: 1px solid var(--border);
-      background: #fff;
-      box-shadow: var(--shadow-lg);
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      animation: scaleIn .18s cubic-bezier(.2,.8,.2,1);
-    }
-
-    .modal.compact { width: min(520px, 100%); }
-
-    .modal-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 18px 22px 14px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .modal-title-wrap { min-width: 0; flex: 1 1 auto; }
-
-    .modal-title {
-      margin: 0;
-      font-size: 17px;
-      font-weight: 700;
-    }
-
-    .modal-sub {
-      margin-top: 4px;
-      font-size: 13px;
-      color: var(--text-soft);
-      word-break: break-word;
-    }
-
-    .modal-sub:empty { display: none; }
-
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      padding: 12px 22px 18px;
-      border-top: 1px solid var(--border);
-      background: #fff;
-    }
-
-    .modal-actions:empty { display: none; }
-
-    .modal-body {
-      padding: 16px 22px 22px;
-      overflow: auto;
-    }
-
-    .modal-body pre {
-      min-height: 320px;
-      border-radius: 14px;
-    }
-
-    .modal-message {
-      margin: 0;
-      color: var(--text);
-      white-space: pre-wrap;
-      word-break: break-word;
-      line-height: 1.7;
-    }
-
-    .tabbar {
-      display: inline-flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      padding: 5px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      background: #fff;
-      box-shadow: var(--shadow-sm);
-      width: fit-content;
-      max-width: 100%;
-    }
-
-    .tab {
-      border: none;
-      background: transparent;
-      color: var(--text-soft);
-      font-weight: 600;
-      padding: 10px 18px;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: all .18s ease;
-      font-size: 14px;
-    }
-
-    .tab:hover {
-      background: var(--primary-soft);
-      color: var(--primary-strong);
-    }
-
-    .tab.active {
-      background: var(--gradient-primary);
-      color: #fff;
-      box-shadow: 0 8px 18px rgba(79, 70, 229, 0.24);
-    }
-
-    .tab-panel { display: none; gap: 18px; }
-    .tab-panel.active { display: grid; }
-
-    section {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 20px;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
-
-    .section-head > .actions { flex-shrink: 0; }
-
-    .section-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: 0.1px;
-    }
-
-    .section-desc {
-      margin-top: 4px;
-      font-size: 13px;
-      color: var(--text-soft);
-    }
-
-    .section-tag {
-      display: inline-flex;
-      align-items: center;
-      padding: 3px 10px;
-      border-radius: 999px;
-      background: var(--primary-soft);
-      color: var(--primary-strong);
-      font-size: 12px;
-      font-weight: 700;
-      margin-bottom: 8px;
-      letter-spacing: 0.3px;
-    }
-
-    .summary-grid {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-
-    .card {
-      background: var(--panel-soft);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px 16px;
-      min-height: 96px;
-      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-      position: relative;
-    }
-
-    .card:hover {
-      transform: translateY(-1px);
-      box-shadow: var(--shadow-sm);
-      border-color: var(--border-strong);
-    }
-
-    .card-label {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-      letter-spacing: 0.3px;
-      text-transform: uppercase;
-      font-weight: 600;
-    }
-
-    .card-value {
-      font-size: 15px;
-      font-weight: 700;
-      word-break: break-word;
-      white-space: pre-wrap;
-      line-height: 1.5;
-    }
-
-    .toolbar-box {
-      background: var(--panel-soft);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      margin-bottom: 14px;
-    }
-
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: flex-end;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      min-width: 180px;
-      flex: 1 1 200px;
-    }
-
-    .field.small {
-      flex: 0 0 120px;
-      min-width: 120px;
-    }
-
-    .field label {
-      font-size: 12px;
-      color: var(--text-soft);
-      font-weight: 600;
-      letter-spacing: 0.2px;
-    }
-
-    input, select, textarea, button {
-      font: inherit;
-      border-radius: var(--radius-sm);
-    }
-
-    input, select, textarea {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--border-strong);
-      background: #fff;
-      color: var(--text);
-      transition: border-color .15s ease, box-shadow .15s ease;
-      font-size: 14px;
-    }
-
-    input::placeholder, textarea::placeholder { color: #a4aec5; }
-
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, .15);
-    }
-
-    textarea {
-      min-height: 480px;
-      resize: vertical;
-      font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
-      line-height: 1.6;
-      font-size: 13px;
-    }
-
-    button {
-      border: none;
-      padding: 10px 16px;
-      font-weight: 600;
-      cursor: pointer;
-      color: #fff;
-      background: var(--primary);
-      transition: background-color .15s ease, transform .05s ease, box-shadow .15s ease;
-      white-space: nowrap;
-      font-size: 14px;
-    }
-
-    button:hover { background: var(--primary-strong); }
-    button:active { transform: translateY(1px); }
-    button:disabled { opacity: .6; cursor: not-allowed; }
-    button.secondary { background: #475569; }
-    button.secondary:hover { background: #334155; }
-    button.danger { background: var(--danger); }
-    button.danger:hover { background: var(--danger-hover); }
-    button.warn { background: #f59e0b; }
-    button.warn:hover { background: #d97706; }
-    button.ghost {
-      background: var(--primary-soft);
-      color: var(--primary-strong);
-      border: 1px solid #d6d8fb;
-    }
-    button.ghost:hover { background: #e1e3fc; }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 12px;
-      color: var(--text-soft);
-      font-size: 13px;
-    }
-
-    .table-wrap {
-      position: relative;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: auto;
-      background: #fff;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .table-wrap.loading table { opacity: .45; }
-
-    .table-loading {
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: rgba(255,255,255,.75);
-      color: var(--text);
-      font-size: 14px;
-      font-weight: 600;
-      z-index: 2;
-      backdrop-filter: blur(2px);
-    }
-
-    .table-loading.show { display: flex; }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13.5px;
-      min-width: 980px;
-    }
-
-    thead { background: var(--panel-soft); }
-
-    th {
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      font-size: 11.5px;
-      color: var(--text-soft);
-    }
-
-    th, td {
-      text-align: left;
-      padding: 12px 12px;
-      border-bottom: 1px solid #eef2f8;
-      vertical-align: top;
-    }
-
-    tbody tr:last-child td { border-bottom: none; }
-
-    th.num, td.num {
-      text-align: right;
-      white-space: nowrap;
-      width: 90px;
-    }
-
-    td.metric-success { color: var(--success); font-weight: 700; }
-    td.metric-pending { color: #d97706; font-weight: 700; }
-    td.metric-reject { color: var(--danger); font-weight: 700; }
-    td.metric-remaining { color: #2563eb; font-weight: 700; }
-
-    th.short, td.short {
-      white-space: nowrap;
-      width: 120px;
-    }
-
-    th.action-col, td.action-col {
-      white-space: nowrap;
-      width: 220px;
-    }
-
-    td.action-col .actions {
-      justify-content: flex-end;
-      flex-wrap: nowrap;
-      gap: 6px;
-    }
-
-    td.action-col .actions button {
-      min-width: 52px;
-      padding: 5px 8px;
-      font-size: 12px;
-    }
-
-    tbody tr { transition: background-color .1s ease; }
-    tbody tr:hover { background: #f5f8ff; }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 3px 10px;
-      border-radius: 999px;
-      background: var(--primary-soft);
-      color: var(--primary-strong);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.2px;
-    }
-
-    .spinner {
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      border: 2px solid #dbeafe;
-      border-top-color: var(--primary);
-      animation: spin .8s linear infinite;
-      flex: 0 0 auto;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes scaleIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
-
-    .mono {
-      font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
-      background: #f3f6fb;
-      border: 1px solid #e4e9f3;
-      border-radius: 7px;
-      padding: 2px 7px;
-      word-break: break-all;
-      font-size: 12.5px;
-    }
-
-    .helper {
-      padding: 12px 14px;
-      border-radius: var(--radius-sm);
-      background: var(--panel-soft);
-      border: 1px dashed var(--border-strong);
-      color: var(--text-soft);
-      font-size: 13px;
-    }
-
-    .detail-stack,
-    .config-stack { display: grid; gap: 16px; }
-
-    pre {
-      margin: 0;
-      padding: 16px;
-      color: #e2e8f0;
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: var(--radius);
-      overflow: auto;
-      min-height: 220px;
-      font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
-      line-height: 1.6;
-      font-size: 12.5px;
-    }
-
-    .editor-wrap {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      background: #fff;
-    }
-
-    .editor-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-      padding: 12px 14px;
-      background: var(--panel-soft);
-      border-bottom: 1px solid var(--border);
-      color: var(--text-soft);
-      font-size: 13px;
-    }
-
-    .editor-head strong {
-      color: var(--text);
-      font-size: 14px;
-    }
-
-    .editor-wrap textarea {
-      border: none;
-      border-radius: 0;
-      box-shadow: none;
-    }
-
-    .editor-wrap textarea:focus { box-shadow: none; }
-
-    .empty {
-      text-align: center;
-      color: var(--text-soft);
-      padding: 28px 16px;
-    }
-
-    /* ---- 移动端自适应 ---- */
-    @media (max-width: 900px) {
-      header { padding: 22px 16px 20px; }
-
-      header h1 { font-size: 19px; }
-
-      .header-inner {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .header-actions {
-        width: 100%;
-        justify-content: flex-start;
-      }
-
-      main { padding: 16px 12px 24px; gap: 14px; }
-
-      section { padding: 16px; border-radius: 16px; }
-
-      .toolbar-box { padding: 12px; }
-
-      .toolbar {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-      }
-
-      /* 列方向下 flex-basis 会变成高度，需要强制重置，否则字段间会有巨大空白 */
-      .field,
-      .field.small {
-        width: 100%;
-        min-width: 0;
-        flex: 0 0 auto;
-      }
-
-      .tabbar,
-      .tab { width: 100%; }
-
-      .tabbar { justify-content: stretch; }
-      .tab { flex: 1 1 0; text-align: center; }
-
-      .toolbar > .actions { width: 100%; }
-      .toolbar > .actions > button { flex: 1 1 0; }
-
-      .section-head {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-      }
-
-      .section-head .actions { width: 100%; }
-      .section-head .actions > button { flex: 1 1 auto; width: 100%; }
-
-      .editor-head {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-      }
-
-      textarea { min-height: 360px; }
-
-      .modal-head,
-      .modal-body,
-      .modal-actions { padding-left: 16px; padding-right: 16px; }
-
-      .modal-actions { justify-content: stretch; }
-      .modal-actions button { flex: 1 1 auto; }
-    }
-
-    /* 表格在小屏上转为卡片布局 */
-    @media (max-width: 760px) {
-      .table-wrap { border: none; background: transparent; overflow: visible; }
-
-      .table-wrap.loading { opacity: .55; }
-
-      table { min-width: 0; border-collapse: separate; border-spacing: 0; }
-
-      thead { display: none; }
-
-      tbody, tr, td { display: block; width: 100%; }
-
-      tr {
-        background: #fff;
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        margin-bottom: 10px;
-        padding: 10px 12px;
-        box-shadow: var(--shadow-sm);
-      }
-
-      tr:hover { background: #fff; }
-
-      td {
-        padding: 8px 0;
-        border-bottom: 1px solid #f0f3f9;
-        display: grid;
-        grid-template-columns: minmax(86px, 0.4fr) 1fr;
-        gap: 12px;
-        align-items: center;
-      }
-
-      td:last-child { border-bottom: none; }
-
-      td::before {
-        content: attr(data-label);
-        font-size: 12px;
-        color: var(--text-muted);
-        font-weight: 600;
-        letter-spacing: 0.3px;
-        text-transform: uppercase;
-      }
-
-      td.num, td.short { text-align: left; width: auto; white-space: normal; }
-
-      td.action-col { width: auto; }
-
-      td.action-col .actions {
-        justify-content: flex-end;
-        flex-wrap: wrap;
-      }
-
-      td.action-col .actions button {
-        flex: 1 1 auto;
-        min-width: 0;
-        padding: 9px 12px;
-        font-size: 13px;
-      }
-
-      td.empty {
-        display: block;
-        text-align: center;
-        grid-template-columns: none;
-      }
-
-      td.empty::before { content: none; }
-
-      .table-loading { border-radius: var(--radius); }
-    }
-
-    @media (max-width: 420px) {
-      header { padding: 18px 14px 16px; }
-      .auth-card { padding: 24px 20px 20px; }
-      .brand-badge { width: 38px; height: 38px; }
-      header h1 { font-size: 17px; }
-      .section-title { font-size: 17px; }
-      button { padding: 10px 14px; }
-    }
-
-    /* 安全区，避免刘海/底部手势条遮挡 */
-    @supports (padding: max(0px)) {
-      header { padding-top: max(28px, env(safe-area-inset-top) + 16px); }
-      main { padding-bottom: max(40px, env(safe-area-inset-bottom) + 16px); }
-    }
-  </style>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <meta name="theme-color" content="#0f172a"/>
+    <title>quota-proxy 管理面板</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #eef2fb;
+            --bg-grad: radial-gradient(1200px 600px at 10% -10%, #dbe6ff 0%, transparent 60%),
+            radial-gradient(900px 500px at 110% 10%, #e9dffc 0%, transparent 60%),
+            linear-gradient(180deg, #eef2fb 0%, #f4f7fb 100%);
+            --panel: #ffffff;
+            --panel-soft: #f7f9fd;
+            --panel-strong: #ffffff;
+            --border: #e3e9f4;
+            --border-strong: #cfd8e8;
+            --text: #0f172a;
+            --text-soft: #5b6b87;
+            --text-muted: #8593ac;
+            --primary: #4f46e5;
+            --primary-strong: #4338ca;
+            --primary-soft: #eef0ff;
+            --accent: #0ea5e9;
+            --danger: #dc2626;
+            --danger-hover: #b91c1c;
+            --success: #059669;
+            --success-bg: #ecfdf5;
+            --success-text: #065f46;
+            --error-bg: #fef2f2;
+            --error-text: #b42318;
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.04);
+            --shadow: 0 10px 30px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.04);
+            --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.18);
+            --radius-lg: 20px;
+            --radius: 14px;
+            --radius-sm: 10px;
+            --gradient-primary: linear-gradient(135deg, #6366f1 0%, #4338ca 50%, #2563eb 100%);
+            --gradient-hero: linear-gradient(135deg, #0f172a 0%, #1e2a5a 55%, #2f3d88 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, Arial, sans-serif;
+            background: var(--bg);
+            background-image: var(--bg-grad);
+            background-attachment: fixed;
+            color: var(--text);
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        header {
+            background: var(--gradient-hero);
+            color: #fff;
+            padding: 28px 24px 26px;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 1px solid rgba(255, 255, 255, .06);
+        }
+
+        header::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(600px 240px at 80% 0%, rgba(99, 102, 241, 0.35) 0%, transparent 65%);
+            pointer-events: none;
+        }
+
+        .header-inner,
+        main {
+            max-width: 1360px;
+            margin: 0 auto;
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            position: relative;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .brand-badge {
+            width: 44px;
+            height: 44px;
+            flex: 0 0 auto;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .08));
+            border: 1px solid rgba(255, 255, 255, .22);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .brand-badge svg {
+            width: 22px;
+            height: 22px;
+            color: #fff;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            line-height: 1.2;
+        }
+
+        .sub {
+            margin-top: 3px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, .72);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .auth-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: rgba(255, 255, 255, .08);
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            backdrop-filter: blur(6px);
+        }
+
+        .auth-status::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #f59e0b;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
+        }
+
+        .auth-status.ok::before {
+            background: #22c55e;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22);
+        }
+
+        button.header-btn {
+            background: rgba(255, 255, 255, .12);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, .2);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 13px;
+            backdrop-filter: blur(6px);
+        }
+
+        button.header-btn:hover {
+            background: rgba(255, 255, 255, .2);
+        }
+
+        main {
+            padding: 22px 16px 40px;
+            display: grid;
+            gap: 18px;
+        }
+
+        .auth-shell {
+            min-height: calc(100vh - 220px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 4px;
+        }
+
+        .auth-shell[hidden] {
+            display: none !important;
+        }
+
+        .auth-card {
+            width: min(440px, 100%);
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 28px 26px 24px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .auth-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-primary);
+        }
+
+        .auth-logo {
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
+            background: var(--gradient-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            box-shadow: 0 12px 30px rgba(79, 70, 229, 0.28);
+        }
+
+        .auth-logo svg {
+            width: 24px;
+            height: 24px;
+            color: #fff;
+        }
+
+        .auth-title {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .auth-desc {
+            margin: 6px 0 18px;
+            font-size: 13px;
+            color: var(--text-soft);
+            line-height: 1.6;
+        }
+
+        .auth-stack {
+            display: grid;
+            gap: 14px;
+        }
+
+        .auth-error {
+            padding: 11px 14px;
+            border-radius: var(--radius-sm);
+            background: var(--error-bg);
+            color: var(--error-text);
+            border: 1px solid rgba(180, 35, 24, 0.15);
+            font-size: 13px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .auth-error::before {
+            content: "!";
+            flex: 0 0 auto;
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            background: currentColor;
+            color: var(--error-bg);
+            font-size: 12px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 1px;
+        }
+
+        .auth-error:empty {
+            display: none;
+        }
+
+        .auth-submit {
+            width: 100%;
+            background: var(--gradient-primary);
+            padding: 12px 16px;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 0.2px;
+            box-shadow: 0 10px 26px rgba(79, 70, 229, 0.3);
+        }
+
+        .auth-submit:hover {
+            filter: brightness(1.05);
+        }
+
+        .auth-submit:disabled {
+            opacity: .7;
+            cursor: progress;
+        }
+
+        .modal-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.48);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 1000;
+            animation: fadeIn .16s ease;
+        }
+
+        .modal-mask.show {
+            display: flex;
+        }
+
+        .modal {
+            width: min(920px, 100%);
+            max-height: calc(100vh - 40px);
+            overflow: hidden;
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            background: #fff;
+            box-shadow: var(--shadow-lg);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            animation: scaleIn .18s cubic-bezier(.2, .8, .2, 1);
+        }
+
+        .modal.compact {
+            width: min(520px, 100%);
+        }
+
+        .modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 18px 22px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-title-wrap {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .modal-title {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .modal-sub {
+            margin-top: 4px;
+            font-size: 13px;
+            color: var(--text-soft);
+            word-break: break-word;
+        }
+
+        .modal-sub:empty {
+            display: none;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 12px 22px 18px;
+            border-top: 1px solid var(--border);
+            background: #fff;
+        }
+
+        .modal-actions:empty {
+            display: none;
+        }
+
+        .modal-body {
+            padding: 16px 22px 22px;
+            overflow: auto;
+        }
+
+        .modal-body pre {
+            min-height: 320px;
+            border-radius: 14px;
+        }
+
+        .modal-message {
+            margin: 0;
+            color: var(--text);
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.7;
+        }
+
+        .tabbar {
+            display: inline-flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            padding: 5px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: #fff;
+            box-shadow: var(--shadow-sm);
+            width: fit-content;
+            max-width: 100%;
+        }
+
+        .tab {
+            border: none;
+            background: transparent;
+            color: var(--text-soft);
+            font-weight: 600;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all .18s ease;
+            font-size: 14px;
+        }
+
+        .tab:hover {
+            background: var(--primary-soft);
+            color: var(--primary-strong);
+        }
+
+        .tab.active {
+            background: var(--gradient-primary);
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(79, 70, 229, 0.24);
+        }
+
+        .tab-panel {
+            display: none;
+            gap: 18px;
+        }
+
+        .tab-panel.active {
+            display: grid;
+        }
+
+        section {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .section-head > .actions {
+            flex-shrink: 0;
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 0.1px;
+        }
+
+        .section-desc {
+            margin-top: 4px;
+            font-size: 13px;
+            color: var(--text-soft);
+        }
+
+        .section-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: var(--primary-strong);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: 0.3px;
+        }
+
+        .summary-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .card {
+            background: var(--panel-soft);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            min-height: 96px;
+            transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+            position: relative;
+        }
+
+        .card:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+            border-color: var(--border-strong);
+        }
+
+        .card-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .card-value {
+            font-size: 15px;
+            font-weight: 700;
+            word-break: break-word;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .toolbar-box {
+            background: var(--panel-soft);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 180px;
+            flex: 1 1 200px;
+        }
+
+        .field.small {
+            flex: 0 0 120px;
+            min-width: 120px;
+        }
+
+        .field label {
+            font-size: 12px;
+            color: var(--text-soft);
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        input, select, textarea, button {
+            font: inherit;
+            border-radius: var(--radius-sm);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-strong);
+            background: #fff;
+            color: var(--text);
+            transition: border-color .15s ease, box-shadow .15s ease;
+            font-size: 14px;
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: #a4aec5;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, .15);
+        }
+
+        textarea {
+            min-height: 480px;
+            resize: vertical;
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+            line-height: 1.6;
+            font-size: 13px;
+        }
+
+        button {
+            border: none;
+            padding: 10px 16px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #fff;
+            background: var(--primary);
+            transition: background-color .15s ease, transform .05s ease, box-shadow .15s ease;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: var(--primary-strong);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button:disabled {
+            opacity: .6;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background: #475569;
+        }
+
+        button.secondary:hover {
+            background: #334155;
+        }
+
+        button.danger {
+            background: var(--danger);
+        }
+
+        button.danger:hover {
+            background: var(--danger-hover);
+        }
+
+        button.warn {
+            background: #f59e0b;
+        }
+
+        button.warn:hover {
+            background: #d97706;
+        }
+
+        button.ghost {
+            background: var(--primary-soft);
+            color: var(--primary-strong);
+            border: 1px solid #d6d8fb;
+        }
+
+        button.ghost:hover {
+            background: #e1e3fc;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+            color: var(--text-soft);
+            font-size: 13px;
+        }
+
+        .table-wrap {
+            position: relative;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: auto;
+            background: #fff;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .table-wrap.loading table {
+            opacity: .45;
+        }
+
+        .table-loading {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, .75);
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 2;
+            backdrop-filter: blur(2px);
+        }
+
+        .table-loading.show {
+            display: flex;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13.5px;
+            min-width: 980px;
+        }
+
+        thead {
+            background: var(--panel-soft);
+        }
+
+        th {
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            font-size: 11.5px;
+            color: var(--text-soft);
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px 12px;
+            border-bottom: 1px solid #eef2f8;
+            vertical-align: top;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        th.num, td.num {
+            text-align: right;
+            white-space: nowrap;
+            width: 90px;
+        }
+
+        td.metric-success {
+            color: var(--success);
+            font-weight: 700;
+        }
+
+        td.metric-pending {
+            color: #d97706;
+            font-weight: 700;
+        }
+
+        td.metric-reject {
+            color: var(--danger);
+            font-weight: 700;
+        }
+
+        td.metric-remaining {
+            color: #2563eb;
+            font-weight: 700;
+        }
+
+        th.short, td.short {
+            white-space: nowrap;
+            width: 120px;
+        }
+
+        th.action-col, td.action-col {
+            white-space: nowrap;
+            width: 220px;
+        }
+
+        td.action-col .actions {
+            justify-content: flex-end;
+            flex-wrap: nowrap;
+            gap: 6px;
+        }
+
+        td.action-col .actions button {
+            min-width: 52px;
+            padding: 5px 8px;
+            font-size: 12px;
+        }
+
+        tbody tr {
+            transition: background-color .1s ease;
+        }
+
+        tbody tr:hover {
+            background: #f5f8ff;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: var(--primary-strong);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            border: 2px solid #dbeafe;
+            border-top-color: var(--primary);
+            animation: spin .8s linear infinite;
+            flex: 0 0 auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(.96);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .mono {
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+            background: #f3f6fb;
+            border: 1px solid #e4e9f3;
+            border-radius: 7px;
+            padding: 2px 7px;
+            word-break: break-all;
+            font-size: 12.5px;
+        }
+
+        .helper {
+            padding: 12px 14px;
+            border-radius: var(--radius-sm);
+            background: var(--panel-soft);
+            border: 1px dashed var(--border-strong);
+            color: var(--text-soft);
+            font-size: 13px;
+        }
+
+        .detail-stack,
+        .config-stack {
+            display: grid;
+            gap: 16px;
+        }
+
+        .config-topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .config-mode-tabs {
+            display: inline-flex;
+            gap: 4px;
+            padding: 4px;
+            border: 1px solid var(--border-strong);
+            border-radius: 999px;
+            background: #fff;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .config-mode-tabs button {
+            padding: 8px 16px;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--text-soft);
+            border: none;
+        }
+
+        .config-mode-tabs button.active {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .config-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .config-visual {
+            display: grid;
+            gap: 14px;
+        }
+
+        .config-card,
+        .config-subcard {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .config-subcard {
+            border-radius: var(--radius-sm);
+            background: var(--panel-strong);
+        }
+
+        .config-card-head,
+        .config-subcard-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            padding: 12px 14px;
+            background: var(--panel-soft);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .config-card-title,
+        .config-subcard-title {
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .config-card-desc,
+        .config-subcard-desc {
+            margin-top: 2px;
+            color: var(--text-soft);
+            font-size: 12px;
+        }
+
+        .config-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+            padding: 14px;
+        }
+
+        .config-stack-inner {
+            display: grid;
+            gap: 12px;
+            padding: 14px;
+        }
+
+        .config-row-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .config-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: start;
+        }
+
+        .config-inline-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .config-inline-actions button,
+        button.config-small-btn {
+            padding: 7px 10px;
+            font-size: 12px;
+        }
+
+        .config-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 42px;
+            padding: 9px 12px;
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            background: #fff;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .config-switch input {
+            width: 18px;
+            height: 18px;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        .config-field-tip {
+            color: var(--text-soft);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .config-help {
+            color: var(--text-soft);
+            font-size: 12px;
+            padding: 0 14px 12px;
+        }
+
+        .config-compact-textarea {
+            min-height: 120px;
+            max-height: 260px;
+        }
+
+        .config-error-box {
+            padding: 11px 14px;
+            border-radius: var(--radius-sm);
+            background: var(--error-bg);
+            color: var(--error-text);
+            border: 1px solid #fecaca;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+
+        .config-hidden {
+            display: none !important;
+        }
+
+        pre {
+            margin: 0;
+            padding: 16px;
+            color: #e2e8f0;
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: var(--radius);
+            overflow: auto;
+            min-height: 220px;
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+            line-height: 1.6;
+            font-size: 12.5px;
+        }
+
+        .editor-wrap {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            background: #fff;
+        }
+
+        .editor-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            padding: 12px 14px;
+            background: var(--panel-soft);
+            border-bottom: 1px solid var(--border);
+            color: var(--text-soft);
+            font-size: 13px;
+        }
+
+        .editor-head strong {
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .editor-wrap textarea {
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .editor-wrap textarea:focus {
+            box-shadow: none;
+        }
+
+        .empty {
+            text-align: center;
+            color: var(--text-soft);
+            padding: 28px 16px;
+        }
+
+        /* ---- 移动端自适应 ---- */
+        @media (max-width: 900px) {
+            header {
+                padding: 22px 16px 20px;
+            }
+
+            header h1 {
+                font-size: 19px;
+            }
+
+            .header-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            main {
+                padding: 16px 12px 24px;
+                gap: 14px;
+            }
+
+            section {
+                padding: 16px;
+                border-radius: 16px;
+            }
+
+            .toolbar-box {
+                padding: 12px;
+            }
+
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            /* 列方向下 flex-basis 会变成高度，需要强制重置，否则字段间会有巨大空白 */
+            .field,
+            .field.small {
+                width: 100%;
+                min-width: 0;
+                flex: 0 0 auto;
+            }
+
+            .tabbar,
+            .tab {
+                width: 100%;
+            }
+
+            .tabbar {
+                justify-content: stretch;
+            }
+
+            .tab {
+                flex: 1 1 0;
+                text-align: center;
+            }
+
+            .toolbar > .actions {
+                width: 100%;
+            }
+
+            .toolbar > .actions > button {
+                flex: 1 1 0;
+            }
+
+            .section-head {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+
+            .section-head .actions {
+                width: 100%;
+            }
+
+            .section-head .actions > button {
+                flex: 1 1 auto;
+                width: 100%;
+            }
+
+            .editor-head {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            textarea {
+                min-height: 360px;
+            }
+
+            .modal-head,
+            .modal-body,
+            .modal-actions {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .modal-actions {
+                justify-content: stretch;
+            }
+
+            .modal-actions button {
+                flex: 1 1 auto;
+            }
+        }
+
+        /* 表格在小屏上转为卡片布局 */
+        @media (max-width: 760px) {
+            .table-wrap {
+                border: none;
+                background: transparent;
+                overflow: visible;
+            }
+
+            .table-wrap.loading {
+                opacity: .55;
+            }
+
+            table {
+                min-width: 0;
+                border-collapse: separate;
+                border-spacing: 0;
+            }
+
+            thead {
+                display: none;
+            }
+
+            tbody, tr, td {
+                display: block;
+                width: 100%;
+            }
+
+            tr {
+                background: #fff;
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                margin-bottom: 10px;
+                padding: 10px 12px;
+                box-shadow: var(--shadow-sm);
+            }
+
+            tr:hover {
+                background: #fff;
+            }
+
+            td {
+                padding: 8px 0;
+                border-bottom: 1px solid #f0f3f9;
+                display: grid;
+                grid-template-columns: minmax(86px, 0.4fr) 1fr;
+                gap: 12px;
+                align-items: center;
+            }
+
+            td:last-child {
+                border-bottom: none;
+            }
+
+            td::before {
+                content: attr(data-label);
+                font-size: 12px;
+                color: var(--text-muted);
+                font-weight: 600;
+                letter-spacing: 0.3px;
+                text-transform: uppercase;
+            }
+
+            td.num, td.short {
+                text-align: left;
+                width: auto;
+                white-space: normal;
+            }
+
+            td.action-col {
+                width: auto;
+            }
+
+            td.action-col .actions {
+                justify-content: flex-end;
+                flex-wrap: wrap;
+            }
+
+            td.action-col .actions button {
+                flex: 1 1 auto;
+                min-width: 0;
+                padding: 9px 12px;
+                font-size: 13px;
+            }
+
+            td.empty {
+                display: block;
+                text-align: center;
+                grid-template-columns: none;
+            }
+
+            td.empty::before {
+                content: none;
+            }
+
+            .table-loading {
+                border-radius: var(--radius);
+            }
+        }
+
+        @media (max-width: 420px) {
+            header {
+                padding: 18px 14px 16px;
+            }
+
+            .auth-card {
+                padding: 24px 20px 20px;
+            }
+
+            .brand-badge {
+                width: 38px;
+                height: 38px;
+            }
+
+            header h1 {
+                font-size: 17px;
+            }
+
+            .section-title {
+                font-size: 17px;
+            }
+
+            button {
+                padding: 10px 14px;
+            }
+        }
+
+        /* 安全区，避免刘海/底部手势条遮挡 */
+        @supports (padding: max(0px)) {
+            header {
+                padding-top: max(28px, env(safe-area-inset-top) + 16px);
+            }
+
+            main {
+                padding-bottom: max(40px, env(safe-area-inset-bottom) + 16px);
+            }
+        }
+    </style>
 </head>
 <body>
 <header>
-  <div class="header-inner">
-    <div class="brand">
-      <div class="brand-badge" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2 3 7v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V7l-9-5z" />
-          <path d="M9 12l2 2 4-4" />
-        </svg>
-      </div>
-      <div>
-        <h1>quota-proxy 管理面板</h1>
-        <div class="sub">访问配额 · 运行时配置 · 实时监控</div>
-      </div>
+    <div class="header-inner">
+        <div class="brand">
+            <div class="brand-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                     stroke-linejoin="round">
+                    <path d="M12 2 3 7v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V7l-9-5z"/>
+                    <path d="M9 12l2 2 4-4"/>
+                </svg>
+            </div>
+            <div>
+                <h1>quota-proxy 管理面板</h1>
+                <div class="sub">访问配额 · 运行时配置 · 实时监控</div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <div id="authStatus" class="auth-status">未授权</div>
+            <button id="logoutBtn" class="header-btn" type="button" onclick="logout()" hidden>退出登录</button>
+        </div>
     </div>
-    <div class="header-actions">
-      <div id="authStatus" class="auth-status">未授权</div>
-      <button id="logoutBtn" class="header-btn" type="button" onclick="logout()" hidden>退出登录</button>
-    </div>
-  </div>
 </header>
 <main>
-  <section id="authPanel" class="auth-shell" hidden>
-    <div class="auth-card">
-      <div class="auth-logo" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="4" y="10" width="16" height="11" rx="2" />
-          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-          <circle cx="12" cy="15.5" r="1.2" fill="currentColor" />
-        </svg>
-      </div>
-      <h2 class="auth-title">管理员登录</h2>
-      <p class="auth-desc">支持从 URL 参数 <code class="mono">api_key</code> 自动带入，登录后会在本地浏览器中记住最近一次成功使用的密钥。</p>
-      <form class="auth-stack" onsubmit="event.preventDefault(); doAuth();">
-        <div class="field">
-          <label for="authCodeInput">管理密钥</label>
-          <input id="authCodeInput" type="password" placeholder="请输入 API Key" autocomplete="off" />
+    <section id="authPanel" class="auth-shell" hidden>
+        <div class="auth-card">
+            <div class="auth-logo" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                     stroke-linejoin="round">
+                    <rect x="4" y="10" width="16" height="11" rx="2"/>
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+                    <circle cx="12" cy="15.5" r="1.2" fill="currentColor"/>
+                </svg>
+            </div>
+            <h2 class="auth-title">管理员登录</h2>
+            <p class="auth-desc">支持从 URL 参数 <code class="mono">api_key</code> 自动带入，登录后会在本地浏览器中记住最近一次成功使用的密钥。
+            </p>
+            <form class="auth-stack" onsubmit="event.preventDefault(); doAuth();">
+                <div class="field">
+                    <label for="authCodeInput">管理密钥</label>
+                    <input id="authCodeInput" type="password" placeholder="请输入 API Key" autocomplete="off"/>
+                </div>
+                <div id="authError" class="auth-error"></div>
+                <button id="loginBtn" class="auth-submit" type="submit">登录</button>
+            </form>
         </div>
-        <div id="authError" class="auth-error"></div>
-        <button id="loginBtn" class="auth-submit" type="submit">登录</button>
-      </form>
+    </section>
+
+    <div id="appShell" class="app-shell" hidden>
+        <div class="tabbar" role="tablist" aria-label="管理面板主导航">
+            <button id="tab-overview" class="tab active" type="button" onclick="switchTab('overview')">概览与额度
+            </button>
+            <button id="tab-config" class="tab" type="button" onclick="switchTab('config')">配置编辑</button>
+        </div>
+
+        <div id="panel-overview" class="tab-panel active">
+            <section>
+                <div class="section-head">
+                    <div>
+                        <div class="section-tag">系统概览</div>
+                        <h2 class="section-title">当前运行信息</h2>
+                        <div class="section-desc">配置来源、上游地址、Redis 与配额状态一览</div>
+                    </div>
+                    <div class="actions">
+                        <button class="ghost" onclick="boot(true)">刷新全部</button>
+                    </div>
+                </div>
+                <div id="summary" class="summary-grid"></div>
+            </section>
+
+            <section>
+                <div class="section-head">
+                    <div>
+                        <div class="section-tag">活跃额度</div>
+                        <h2 class="section-title">当前窗口列表</h2>
+                        <div class="section-desc">按标识或规则筛选当前生效中的配额记录</div>
+                    </div>
+                </div>
+
+                <div class="toolbar-box">
+                    <div class="toolbar">
+                        <div class="field">
+                            <label for="identityFilter">按标识筛选</label>
+                            <input id="identityFilter" placeholder="例如：ip:127.0.0.1 或 user:alice"/>
+                        </div>
+                        <div class="field">
+                            <label for="ruleFilter">规则</label>
+                            <select id="ruleFilter"></select>
+                        </div>
+                        <div class="field small">
+                            <label for="pageSize">每页条数</label>
+                            <input id="pageSize" type="number" min="1" max="200" value="20"/>
+                        </div>
+                        <div class="actions">
+                            <button onclick="loadQuotas(true)">查询</button>
+                            <button class="secondary" onclick="toggleAutoRefresh()" id="autoRefreshBtn">自动刷新：关闭
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="meta-row">
+                    <div id="quotaMeta">尚未加载额度数据</div>
+                    <div id="quotaRuleHint">当前筛选规则：全部</div>
+                </div>
+
+                <div class="table-wrap">
+                    <div id="quotaTableLoading" class="table-loading">
+                        <span class="spinner" aria-hidden="true"></span>
+                        <span id="quotaTableLoadingText">正在加载额度列表...</span>
+                    </div>
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>标识</th>
+                            <th class="short">类型</th>
+                            <th>规则</th>
+                            <th class="num">成功次数</th>
+                            <th class="num">待确认</th>
+                            <th class="num">拒绝次数</th>
+                            <th class="num">剩余额度</th>
+                            <th class="short">窗口</th>
+                            <th>周期键</th>
+                            <th class="action-col">操作</th>
+                        </tr>
+                        </thead>
+                        <tbody id="quotaRows"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <div id="panel-config" class="tab-panel">
+            <section>
+                <div class="section-head">
+                    <div>
+                        <div class="section-tag">配置编辑</div>
+                        <h2 class="section-title">配置查看与编辑</h2>
+                        <div class="section-desc">保存后会立即校验并热加载运行时配置</div>
+                    </div>
+                </div>
+
+                <div class="config-stack">
+                    <div class="toolbar-box">
+                        <div class="config-topbar">
+                            <div class="config-mode-tabs" role="tablist" aria-label="配置编辑模式">
+                                <button id="configModeVisual" type="button" onclick="switchConfigEditMode('visual')">
+                                    可视化编辑
+                                </button>
+                                <button id="configModeJson" type="button" onclick="switchConfigEditMode('json')">JSON
+                                    编辑
+                                </button>
+                            </div>
+                            <div class="config-actions">
+                                <button onclick="saveConfigPayload()">保存配置</button>
+                                <button id="formatConfigBtn" class="ghost" onclick="formatConfigEditor()">格式化 JSON
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="configErrorBox" class="config-error-box config-hidden"></div>
+                    <div id="configVisualEditor" class="config-visual"></div>
+
+                    <div id="configJsonEditor" class="editor-wrap config-hidden">
+                        <div class="editor-head">
+                            <strong>当前配置</strong>
+                            <span>JSON 格式 · 全部字段可见可编辑（含敏感字段）</span>
+                        </div>
+                        <textarea id="configEditor" spellcheck="false"></textarea>
+                    </div>
+                </div>
+            </section>
+        </div>
     </div>
-  </section>
-
-  <div id="appShell" class="app-shell" hidden>
-  <div class="tabbar" role="tablist" aria-label="管理面板主导航">
-    <button id="tab-overview" class="tab active" type="button" onclick="switchTab('overview')">概览与额度</button>
-    <button id="tab-config" class="tab" type="button" onclick="switchTab('config')">配置编辑</button>
-  </div>
-
-  <div id="panel-overview" class="tab-panel active">
-    <section>
-      <div class="section-head">
-        <div>
-          <div class="section-tag">系统概览</div>
-          <h2 class="section-title">当前运行信息</h2>
-          <div class="section-desc">配置来源、上游地址、Redis 与配额状态一览</div>
-        </div>
-        <div class="actions">
-          <button class="ghost" onclick="boot(true)">刷新全部</button>
-        </div>
-      </div>
-      <div id="summary" class="summary-grid"></div>
-    </section>
-
-    <section>
-      <div class="section-head">
-        <div>
-          <div class="section-tag">活跃额度</div>
-          <h2 class="section-title">当前窗口列表</h2>
-          <div class="section-desc">按标识或规则筛选当前生效中的配额记录</div>
-        </div>
-      </div>
-
-      <div class="toolbar-box">
-        <div class="toolbar">
-          <div class="field">
-            <label for="identityFilter">按标识筛选</label>
-            <input id="identityFilter" placeholder="例如：ip:127.0.0.1 或 user:alice" />
-          </div>
-          <div class="field">
-            <label for="ruleFilter">规则</label>
-            <select id="ruleFilter"></select>
-          </div>
-          <div class="field small">
-            <label for="pageSize">每页条数</label>
-            <input id="pageSize" type="number" min="1" max="200" value="20" />
-          </div>
-          <div class="actions">
-            <button onclick="loadQuotas(true)">查询</button>
-            <button class="secondary" onclick="toggleAutoRefresh()" id="autoRefreshBtn">自动刷新：关闭</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="meta-row">
-        <div id="quotaMeta">尚未加载额度数据</div>
-        <div id="quotaRuleHint">当前筛选规则：全部</div>
-      </div>
-
-      <div class="table-wrap">
-        <div id="quotaTableLoading" class="table-loading">
-          <span class="spinner" aria-hidden="true"></span>
-          <span id="quotaTableLoadingText">正在加载额度列表...</span>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>标识</th>
-              <th class="short">类型</th>
-              <th>规则</th>
-              <th class="num">成功次数</th>
-              <th class="num">待确认</th>
-              <th class="num">拒绝次数</th>
-              <th class="num">剩余额度</th>
-              <th class="short">窗口</th>
-              <th>周期键</th>
-              <th class="action-col">操作</th>
-            </tr>
-          </thead>
-          <tbody id="quotaRows"></tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-
-  <div id="panel-config" class="tab-panel">
-    <section>
-      <div class="section-head">
-        <div>
-          <div class="section-tag">配置编辑</div>
-          <h2 class="section-title">配置查看与编辑</h2>
-          <div class="section-desc">保存后会立即校验并热加载运行时配置</div>
-        </div>
-      </div>
-
-      <div class="config-stack">
-        <div class="toolbar-box">
-          <div class="actions">
-            <button onclick="saveConfigPayload()">保存配置</button>
-            <button class="ghost" onclick="formatConfigEditor()">格式化 JSON</button>
-          </div>
-        </div>
-
-        <div class="editor-wrap">
-          <div class="editor-head">
-            <strong>当前配置</strong>
-            <span>JSON 格式 · 全部字段可见可编辑（含敏感字段）</span>
-          </div>
-          <textarea id="configEditor" spellcheck="false"></textarea>
-        </div>
-      </div>
-    </section>
-  </div>
-  </div>
 </main>
 <div id="appModal" class="modal-mask" onclick="handleModalMaskClick(event)">
-  <div id="appModalDialog" class="modal compact" role="dialog" aria-modal="true" aria-labelledby="appModalTitle">
-    <div class="modal-head">
-      <div class="modal-title-wrap">
-        <h3 id="appModalTitle" class="modal-title">提示</h3>
-        <div id="appModalSub" class="modal-sub"></div>
-      </div>
+    <div id="appModalDialog" class="modal compact" role="dialog" aria-modal="true" aria-labelledby="appModalTitle">
+        <div class="modal-head">
+            <div class="modal-title-wrap">
+                <h3 id="appModalTitle" class="modal-title">提示</h3>
+                <div id="appModalSub" class="modal-sub"></div>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div id="appModalBody"></div>
+        </div>
+        <div id="appModalActions" class="modal-actions"></div>
     </div>
-    <div class="modal-body">
-      <div id="appModalBody"></div>
-    </div>
-    <div id="appModalActions" class="modal-actions"></div>
-  </div>
 </div>
 <script>
-let autoRefreshTimer = null;
-let autoRefreshCountdown = null;
-let autoRefreshRemaining = 10;
-let activeTab = 'overview';
-let selectedQuota = null;
-let modalState = { onConfirm: null };
-let configLoaded = false;
-let authCode = '';
-let isAuthed = false;
-let authLoading = false;
-const authStorageKey = 'quota_proxy_admin_api_key';
+    let autoRefreshTimer = null;
+    let autoRefreshCountdown = null;
+    let autoRefreshRemaining = 10;
+    let activeTab = 'overview';
+    let selectedQuota = null;
+    let modalState = {onConfirm: null};
+    let configLoaded = false;
+    let configEditMode = 'visual';
+    let configState = {};
+    let authCode = '';
+    let isAuthed = false;
+    let authLoading = false;
+    const authStorageKey = 'quota_proxy_admin_api_key';
 
-function escapeHTML(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function getAutoRefreshButtonText() {
-  return autoRefreshTimer ? `自动刷新：${autoRefreshRemaining} 秒` : '自动刷新：关闭';
-}
-
-function renderAutoRefreshButton() {
-  const btn = document.getElementById('autoRefreshBtn');
-  if (btn) {
-    btn.textContent = getAutoRefreshButtonText();
-  }
-}
-
-function setAuthError(message = '') {
-  const el = document.getElementById('authError');
-  if (el) {
-    el.textContent = message;
-  }
-}
-
-function syncAuthInput() {
-  const input = document.getElementById('authCodeInput');
-  if (input && input.value !== authCode) {
-    input.value = authCode;
-  }
-}
-
-function setAuthLoading(loading) {
-  authLoading = loading;
-  const loginBtn = document.getElementById('loginBtn');
-  const input = document.getElementById('authCodeInput');
-  if (loginBtn) {
-    loginBtn.disabled = loading;
-    loginBtn.textContent = loading ? '验证中...' : '登录';
-  }
-  if (input) {
-    input.disabled = loading;
-  }
-}
-
-function updateAuthUI() {
-  const authPanel = document.getElementById('authPanel');
-  const appShell = document.getElementById('appShell');
-  const authStatus = document.getElementById('authStatus');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const tabOverview = document.getElementById('tab-overview');
-  const tabConfig = document.getElementById('tab-config');
-  const panelOverview = document.getElementById('panel-overview');
-  const panelConfig = document.getElementById('panel-config');
-  if (authPanel) {
-    authPanel.hidden = isAuthed;
-  }
-  if (appShell) {
-    appShell.hidden = !isAuthed;
-  }
-  if (authStatus) {
-    authStatus.textContent = isAuthed ? '已授权' : '未授权';
-    authStatus.classList.toggle('ok', isAuthed);
-  }
-  if (logoutBtn) {
-    logoutBtn.hidden = !isAuthed;
-  }
-  if (tabOverview) {
-    tabOverview.classList.toggle('active', activeTab === 'overview');
-  }
-  if (tabConfig) {
-    tabConfig.classList.toggle('active', activeTab === 'config');
-  }
-  if (panelOverview) {
-    panelOverview.classList.toggle('active', activeTab === 'overview');
-  }
-  if (panelConfig) {
-    panelConfig.classList.toggle('active', activeTab === 'config');
-  }
-  syncAuthInput();
-  renderAutoRefreshButton();
-}
-
-function stopAutoRefreshSilently() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
-  stopAutoRefreshCountdown();
-}
-
-function clearSensitiveState() {
-  stopAutoRefreshSilently();
-  clearDetailSelection();
-  configLoaded = false;
-  const summary = document.getElementById('summary');
-  const quotaRows = document.getElementById('quotaRows');
-  const quotaMeta = document.getElementById('quotaMeta');
-  const quotaRuleHint = document.getElementById('quotaRuleHint');
-  const ruleFilter = document.getElementById('ruleFilter');
-  const configEditor = document.getElementById('configEditor');
-  if (summary) summary.innerHTML = '';
-  if (quotaRows) quotaRows.innerHTML = '';
-  if (quotaMeta) quotaMeta.textContent = '尚未加载额度数据';
-  if (quotaRuleHint) quotaRuleHint.textContent = '当前筛选规则：全部';
-  if (ruleFilter) ruleFilter.innerHTML = '<option value="">全部规则</option>';
-  if (configEditor) configEditor.value = '';
-}
-
-function clearAuthState({ preserveInput = false } = {}) {
-  stopAutoRefreshSilently();
-  isAuthed = false;
-  if (!preserveInput) {
-    authCode = '';
-  }
-  localStorage.removeItem(authStorageKey);
-  clearSensitiveState();
-  updateAuthUI();
-}
-
-function handleUnauthorized(message = '登录已失效，请重新输入管理密钥。') {
-  clearStatus();
-  clearAuthState({ preserveInput: true });
-  setAuthError(message);
-}
-
-function extractErrorMessage(data, fallback = '操作失败，请稍后重试。') {
-  if (!data || typeof data !== 'object') {
-    return fallback;
-  }
-  return data.message || data.error || data.raw || fallback;
-}
-
-async function request(url, options = {}) {
-  const { skipUnauthorizedHandler = false, headers: customHeaders = {}, ...fetchOptions } = options;
-  const headers = { 'Content-Type': 'application/json', ...customHeaders };
-  if (authCode) {
-    headers['X-API-Key'] = authCode;
-  }
-  const res = await fetch(url, { ...fetchOptions, headers });
-  const text = await res.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
-  }
-  if (res.status === 401) {
-    const message = extractErrorMessage(data, '登录已失效，请重新登录。');
-    if (!skipUnauthorizedHandler) {
-      handleUnauthorized(message);
+    function escapeHTML(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
-    throw new Error(message);
-  }
-  if (!res.ok) throw new Error(extractErrorMessage(data));
-  return data;
-}
 
-function startAutoRefreshCountdown() {
-  if (autoRefreshCountdown) {
-    clearInterval(autoRefreshCountdown);
-  }
-  autoRefreshRemaining = 10;
-  renderAutoRefreshButton();
-  autoRefreshCountdown = setInterval(() => {
-    autoRefreshRemaining -= 1;
-    if (autoRefreshRemaining <= 0) {
-      autoRefreshRemaining = 10;
+    function getAutoRefreshButtonText() {
+        return autoRefreshTimer ? `自动刷新：${autoRefreshRemaining} 秒` : '自动刷新：关闭';
     }
-    renderAutoRefreshButton();
-  }, 1000);
-}
 
-function stopAutoRefreshCountdown() {
-  if (autoRefreshCountdown) {
-    clearInterval(autoRefreshCountdown);
-    autoRefreshCountdown = null;
-  }
-  autoRefreshRemaining = 10;
-  renderAutoRefreshButton();
-}
-
-function setQuotaTableLoading(loading, text = '正在加载额度列表...') {
-  const wrap = document.querySelector('.table-wrap');
-  const mask = document.getElementById('quotaTableLoading');
-  const label = document.getElementById('quotaTableLoadingText');
-  if (!wrap || !mask || !label) {
-    return;
-  }
-  label.textContent = text;
-  wrap.classList.toggle('loading', loading);
-  mask.classList.toggle('show', loading);
-}
-
-async function withQuotaTableLoading(task, text) {
-  setQuotaTableLoading(true, text);
-  try {
-    return await task();
-  } finally {
-    setQuotaTableLoading(false);
-  }
-}
-
-async function switchTab(tab) {
-  if (!isAuthed) {
-    activeTab = tab === 'config' ? 'config' : 'overview';
-    updateAuthUI();
-    return;
-  }
-
-  activeTab = tab === 'config' ? 'config' : 'overview';
-  const isOverview = activeTab === 'overview';
-  document.getElementById('tab-overview').classList.toggle('active', isOverview);
-  document.getElementById('tab-config').classList.toggle('active', !isOverview);
-  document.getElementById('panel-overview').classList.toggle('active', isOverview);
-  document.getElementById('panel-config').classList.toggle('active', !isOverview);
-
-  if (isOverview) {
-    await loadSummary();
-    await loadQuotas(true, '正在刷新额度列表...');
-    return;
-  }
-
-  if (!configLoaded) {
-    await loadConfig(true);
-  }
-}
-
-async function doAuth() {
-  const input = document.getElementById('authCodeInput');
-  authCode = input ? input.value.trim() : authCode.trim();
-  if (!authCode) {
-    setAuthError('请输入管理密钥');
-    updateAuthUI();
-    return;
-  }
-
-  setAuthError('');
-  setAuthLoading(true);
-  try {
-    const data = await request('/__admin/login', {
-      method: 'POST',
-      headers: { 'X-API-Key': '' },
-      body: JSON.stringify({ api_key: authCode }),
-      skipUnauthorizedHandler: true
-    });
-    isAuthed = true;
-    localStorage.setItem(authStorageKey, authCode);
-    updateAuthUI();
-    await boot(true);
-    if (data.message && data.message !== '验证通过') {
-      setStatus(data.message, true, '登录成功');
+    function renderAutoRefreshButton() {
+        const btn = document.getElementById('autoRefreshBtn');
+        if (btn) {
+            btn.textContent = getAutoRefreshButtonText();
+        }
     }
-  } catch (err) {
-    isAuthed = false;
-    setAuthError(err.message || '验证失败');
-    clearSensitiveState();
-    updateAuthUI();
-  } finally {
-    setAuthLoading(false);
-  }
-}
 
-function logout() {
-  clearStatus();
-  setAuthError('');
-  clearAuthState();
-}
-
-function escapeAttr(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function closeModal() {
-  modalState.onConfirm = null;
-  document.getElementById('appModal').classList.remove('show');
-}
-
-function handleModalMaskClick(event) {
-  if (event.target && event.target.id === 'appModal') {
-    closeModal();
-  }
-}
-
-function openModal({ title = '提示', subtitle = '', bodyHTML = '', actionsHTML = '', compact = false } = {}) {
-  const mask = document.getElementById('appModal');
-  const dialog = document.getElementById('appModalDialog');
-  document.getElementById('appModalTitle').textContent = title;
-  document.getElementById('appModalSub').textContent = subtitle;
-  document.getElementById('appModalBody').innerHTML = bodyHTML;
-  document.getElementById('appModalActions').innerHTML = actionsHTML;
-  dialog.classList.toggle('compact', compact);
-  mask.classList.add('show');
-}
-
-function showMessageModal(message, ok = true, title = '') {
-  const resolvedTitle = title || (ok ? '操作成功' : '操作失败');
-  openModal({
-    title: resolvedTitle,
-    bodyHTML: `<p class="modal-message">${escapeHTML(message || (ok ? '操作已完成。' : '发生未知错误。'))}</p>`,
-    actionsHTML: '<button type="button" onclick="closeModal()">确定</button>',
-    compact: true
-  });
-}
-
-function showConfirmModal(message, onConfirm, title = '请确认') {
-  modalState.onConfirm = onConfirm;
-  openModal({
-    title,
-    bodyHTML: `<p class="modal-message">${escapeHTML(message)}</p>`,
-    actionsHTML: '<button class="ghost" type="button" onclick="closeModal()">取消</button><button class="danger" type="button" onclick="confirmModalAction()">确认</button>',
-    compact: true
-  });
-}
-
-async function confirmModalAction() {
-  const action = modalState.onConfirm;
-  modalState.onConfirm = null;
-  closeModal();
-  if (typeof action === 'function') {
-    try {
-      await action();
-    } catch (err) {
-      showMessageModal(err.message || '操作失败', false, '操作失败');
+    function setAuthError(message = '') {
+        const el = document.getElementById('authError');
+        if (el) {
+            el.textContent = message;
+        }
     }
-  }
-}
 
-function showQuotaDetailModal(detail, identity, rule) {
-  const subtitle = rule ? `标识：${identity} ｜ 规则：${rule}` : `标识：${identity} ｜ 规则：全部`;
-  openModal({
-    title: '额度详情',
-    subtitle,
-    bodyHTML: `<pre>${escapeHTML(JSON.stringify(detail, null, 2))}</pre>`,
-    actionsHTML: '<button class="ghost" type="button" onclick="loadQuotaDetail()">刷新详情</button><button class="danger" type="button" onclick="resetQuota()">重置当前额度</button>',
-    compact: false
-  });
-}
+    function syncAuthInput() {
+        const input = document.getElementById('authCodeInput');
+        if (input && input.value !== authCode) {
+            input.value = authCode;
+        }
+    }
 
-function setStatus(message, ok = true, title = '') {
-  showMessageModal(message, ok, title);
-}
+    function setAuthLoading(loading) {
+        authLoading = loading;
+        const loginBtn = document.getElementById('loginBtn');
+        const input = document.getElementById('authCodeInput');
+        if (loginBtn) {
+            loginBtn.disabled = loading;
+            loginBtn.textContent = loading ? '验证中...' : '登录';
+        }
+        if (input) {
+            input.disabled = loading;
+        }
+    }
 
-function clearStatus() {
-  closeModal();
-}
+    function updateAuthUI() {
+        const authPanel = document.getElementById('authPanel');
+        const appShell = document.getElementById('appShell');
+        const authStatus = document.getElementById('authStatus');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const tabOverview = document.getElementById('tab-overview');
+        const tabConfig = document.getElementById('tab-config');
+        const panelOverview = document.getElementById('panel-overview');
+        const panelConfig = document.getElementById('panel-config');
+        if (authPanel) {
+            authPanel.hidden = isAuthed;
+        }
+        if (appShell) {
+            appShell.hidden = !isAuthed;
+        }
+        if (authStatus) {
+            authStatus.textContent = isAuthed ? '已授权' : '未授权';
+            authStatus.classList.toggle('ok', isAuthed);
+        }
+        if (logoutBtn) {
+            logoutBtn.hidden = !isAuthed;
+        }
+        if (tabOverview) {
+            tabOverview.classList.toggle('active', activeTab === 'overview');
+        }
+        if (tabConfig) {
+            tabConfig.classList.toggle('active', activeTab === 'config');
+        }
+        if (panelOverview) {
+            panelOverview.classList.toggle('active', activeTab === 'overview');
+        }
+        if (panelConfig) {
+            panelConfig.classList.toggle('active', activeTab === 'config');
+        }
+        syncAuthInput();
+        renderAutoRefreshButton();
+    }
 
-function clearDetailSelection() {
-  selectedQuota = null;
-}
+    function stopAutoRefreshSilently() {
+        if (autoRefreshTimer) {
+            clearInterval(autoRefreshTimer);
+            autoRefreshTimer = null;
+        }
+        stopAutoRefreshCountdown();
+    }
 
-function setSelectedQuota(identity, rule = '') {
-  selectedQuota = { identity: identity || '', rule: rule || '' };
-}
+    function clearSensitiveState() {
+        stopAutoRefreshSilently();
+        clearDetailSelection();
+        configLoaded = false;
+        const summary = document.getElementById('summary');
+        const quotaRows = document.getElementById('quotaRows');
+        const quotaMeta = document.getElementById('quotaMeta');
+        const quotaRuleHint = document.getElementById('quotaRuleHint');
+        const ruleFilter = document.getElementById('ruleFilter');
+        const configEditor = document.getElementById('configEditor');
+        if (summary) summary.innerHTML = '';
+        if (quotaRows) quotaRows.innerHTML = '';
+        if (quotaMeta) quotaMeta.textContent = '尚未加载额度数据';
+        if (quotaRuleHint) quotaRuleHint.textContent = '当前筛选规则：全部';
+        if (ruleFilter) ruleFilter.innerHTML = '<option value="">全部规则</option>';
+        if (configEditor) configEditor.value = '';
+        configState = {};
+        renderConfigVisualEditor({});
+    }
 
-function getSelectedQuota() {
-  const identity = selectedQuota?.identity?.trim?.() || '';
-  const rule = selectedQuota?.rule || '';
-  return { identity, rule };
-}
+    function clearAuthState({preserveInput = false} = {}) {
+        stopAutoRefreshSilently();
+        isAuthed = false;
+        if (!preserveInput) {
+            authCode = '';
+        }
+        localStorage.removeItem(authStorageKey);
+        clearSensitiveState();
+        updateAuthUI();
+    }
 
-function renderSummary(data) {
-  const summary = document.getElementById('summary');
-  summary.innerHTML = '';
-  const successMode = data.success_rule && data.success_rule.mode ? data.success_rule.mode : '默认';
-  const require2xx = data.success_rule && typeof data.success_rule.require_http_2xx !== 'undefined'
-    ? (data.success_rule.require_http_2xx ? '是' : '否')
-    : '未配置';
-  const cards = [
-    ['配置文件路径', data.config_path || '未获取到'],
-    ['上游地址', data.upstream?.target || '未配置'],
-    ['Redis', `${data.redis?.addr || '-'}\nDB：${data.redis?.db ?? '-'}`],
-    ['配额状态', `${data.quota?.enabled ? '已启用' : '已关闭'}\n时区：${data.quota?.timezone || '-'}`],
-    ['失败放行', data.quota?.fail_open ? '开启' : '关闭'],
-    ['身份识别', `${data.identity?.strategy || '-'}\n回退到 IP：${data.identity?.fallback_to_ip ? '是' : '否'}`],
-    ['规则数量', String((data.quota?.rules || []).length)],
-    ['成功判定', `模式：${successMode}\n要求 HTTP 2xx：${require2xx}`]
-  ];
+    function handleUnauthorized(message = '登录已失效，请重新输入管理密钥。') {
+        clearStatus();
+        clearAuthState({preserveInput: true});
+        setAuthError(message);
+    }
 
-  for (const [label, value] of cards) {
-    const div = document.createElement('div');
-    div.className = 'card';
-    div.innerHTML = `<div class="card-label">${escapeHTML(label)}</div><div class="card-value">${escapeHTML(value)}</div>`;
-    summary.appendChild(div);
-  }
+    function extractErrorMessage(data, fallback = '操作失败，请稍后重试。') {
+        if (!data || typeof data !== 'object') {
+            return fallback;
+        }
+        return data.message || data.error || data.raw || fallback;
+    }
 
-  const ruleFilter = document.getElementById('ruleFilter');
-  const options = ['<option value="">全部规则</option>']
-    .concat((data.rule_names || []).map(name => `<option value="${escapeAttr(name)}">${escapeHTML(name)}</option>`));
-  ruleFilter.innerHTML = options.join('');
-}
+    function extractErrorDetail(data) {
+        if (!data || typeof data !== 'object') return '';
+        return data.detail || data.details || '';
+    }
 
-function renderQuotas(data) {
-  document.getElementById('quotaMeta').textContent = `共 ${data.total} 条活跃记录，当前第 ${data.page} 页，每页 ${data.page_size} 条`;
-  document.getElementById('quotaRuleHint').textContent = data.filters?.rule ? `当前筛选规则：${data.filters.rule}` : '当前筛选规则：全部';
-  const tbody = document.getElementById('quotaRows');
-  const items = data.items || [];
-  const hasSelected = items.some(item => item.identity === selectedQuota?.identity && item.rule_name === selectedQuota?.rule);
-  if (!items.length) {
-    clearDetailSelection();
-    tbody.innerHTML = '<tr><td colspan="10" class="empty">当前条件下没有活跃额度记录。</td></tr>';
-    return;
-  }
-  if (!hasSelected && selectedQuota) {
-    clearDetailSelection();
-  }
+    class RequestError extends Error {
+        constructor(message, data = {}, status = 0) {
+            super(message);
+            this.name = 'RequestError';
+            this.data = data;
+            this.status = status;
+            this.detail = extractErrorDetail(data);
+        }
+    }
 
-  tbody.innerHTML = '';
-  for (const item of items) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
+    async function request(url, options = {}) {
+        const {skipUnauthorizedHandler = false, headers: customHeaders = {}, ...fetchOptions} = options;
+        const headers = {'Content-Type': 'application/json', ...customHeaders};
+        if (authCode) {
+            headers['X-API-Key'] = authCode;
+        }
+        const res = await fetch(url, {...fetchOptions, headers});
+        const text = await res.text();
+        let data = {};
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch {
+            data = {raw: text};
+        }
+        if (res.status === 401) {
+            const message = extractErrorMessage(data, '登录已失效，请重新登录。');
+            if (!skipUnauthorizedHandler) {
+                handleUnauthorized(message);
+            }
+            throw new RequestError(message, data, res.status);
+        }
+        if (!res.ok) throw new RequestError(extractErrorMessage(data), data, res.status);
+        return data;
+    }
+
+    function startAutoRefreshCountdown() {
+        if (autoRefreshCountdown) {
+            clearInterval(autoRefreshCountdown);
+        }
+        autoRefreshRemaining = 10;
+        renderAutoRefreshButton();
+        autoRefreshCountdown = setInterval(() => {
+            autoRefreshRemaining -= 1;
+            if (autoRefreshRemaining <= 0) {
+                autoRefreshRemaining = 10;
+            }
+            renderAutoRefreshButton();
+        }, 1000);
+    }
+
+    function stopAutoRefreshCountdown() {
+        if (autoRefreshCountdown) {
+            clearInterval(autoRefreshCountdown);
+            autoRefreshCountdown = null;
+        }
+        autoRefreshRemaining = 10;
+        renderAutoRefreshButton();
+    }
+
+    function setQuotaTableLoading(loading, text = '正在加载额度列表...') {
+        const wrap = document.querySelector('.table-wrap');
+        const mask = document.getElementById('quotaTableLoading');
+        const label = document.getElementById('quotaTableLoadingText');
+        if (!wrap || !mask || !label) {
+            return;
+        }
+        label.textContent = text;
+        wrap.classList.toggle('loading', loading);
+        mask.classList.toggle('show', loading);
+    }
+
+    async function withQuotaTableLoading(task, text) {
+        setQuotaTableLoading(true, text);
+        try {
+            return await task();
+        } finally {
+            setQuotaTableLoading(false);
+        }
+    }
+
+    async function switchTab(tab) {
+        if (!isAuthed) {
+            activeTab = tab === 'config' ? 'config' : 'overview';
+            updateAuthUI();
+            return;
+        }
+
+        activeTab = tab === 'config' ? 'config' : 'overview';
+        const isOverview = activeTab === 'overview';
+        document.getElementById('tab-overview').classList.toggle('active', isOverview);
+        document.getElementById('tab-config').classList.toggle('active', !isOverview);
+        document.getElementById('panel-overview').classList.toggle('active', isOverview);
+        document.getElementById('panel-config').classList.toggle('active', !isOverview);
+
+        if (isOverview) {
+            await loadSummary();
+            await loadQuotas(true, '正在刷新额度列表...');
+            return;
+        }
+
+        if (!configLoaded) {
+            await loadConfig(true);
+        } else {
+            renderConfigEditMode();
+        }
+    }
+
+    async function doAuth() {
+        const input = document.getElementById('authCodeInput');
+        authCode = input ? input.value.trim() : authCode.trim();
+        if (!authCode) {
+            setAuthError('请输入管理密钥');
+            updateAuthUI();
+            return;
+        }
+
+        setAuthError('');
+        setAuthLoading(true);
+        try {
+            const data = await request('/__admin/login', {
+                method: 'POST',
+                headers: {'X-API-Key': ''},
+                body: JSON.stringify({api_key: authCode}),
+                skipUnauthorizedHandler: true
+            });
+            isAuthed = true;
+            localStorage.setItem(authStorageKey, authCode);
+            updateAuthUI();
+            await boot(true);
+            if (data.message && data.message !== '验证通过') {
+                setStatus(data.message, true, '登录成功');
+            }
+        } catch (err) {
+            isAuthed = false;
+            setAuthError(err.message || '验证失败');
+            clearSensitiveState();
+            updateAuthUI();
+        } finally {
+            setAuthLoading(false);
+        }
+    }
+
+    function logout() {
+        clearStatus();
+        setAuthError('');
+        clearAuthState();
+    }
+
+    function escapeAttr(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function closeModal() {
+        modalState.onConfirm = null;
+        document.getElementById('appModal').classList.remove('show');
+    }
+
+    function handleModalMaskClick(event) {
+        if (event.target && event.target.id === 'appModal') {
+            closeModal();
+        }
+    }
+
+    function openModal({title = '提示', subtitle = '', bodyHTML = '', actionsHTML = '', compact = false} = {}) {
+        const mask = document.getElementById('appModal');
+        const dialog = document.getElementById('appModalDialog');
+        document.getElementById('appModalTitle').textContent = title;
+        document.getElementById('appModalSub').textContent = subtitle;
+        document.getElementById('appModalBody').innerHTML = bodyHTML;
+        document.getElementById('appModalActions').innerHTML = actionsHTML;
+        dialog.classList.toggle('compact', compact);
+        mask.classList.add('show');
+    }
+
+    function showMessageModal(message, ok = true, title = '') {
+        const resolvedTitle = title || (ok ? '操作成功' : '操作失败');
+        openModal({
+            title: resolvedTitle,
+            bodyHTML: `<p class="modal-message">${escapeHTML(message || (ok ? '操作已完成。' : '发生未知错误。'))}</p>`,
+            actionsHTML: '<button type="button" onclick="closeModal()">确定</button>',
+            compact: true
+        });
+    }
+
+    function showConfirmModal(message, onConfirm, title = '请确认') {
+        modalState.onConfirm = onConfirm;
+        openModal({
+            title,
+            bodyHTML: `<p class="modal-message">${escapeHTML(message)}</p>`,
+            actionsHTML: '<button class="ghost" type="button" onclick="closeModal()">取消</button><button class="danger" type="button" onclick="confirmModalAction()">确认</button>',
+            compact: true
+        });
+    }
+
+    async function confirmModalAction() {
+        const action = modalState.onConfirm;
+        modalState.onConfirm = null;
+        closeModal();
+        if (typeof action === 'function') {
+            try {
+                await action();
+            } catch (err) {
+                showMessageModal(err.message || '操作失败', false, '操作失败');
+            }
+        }
+    }
+
+    function showQuotaDetailModal(detail, identity, rule) {
+        const subtitle = rule ? `标识：${identity} ｜ 规则：${rule}` : `标识：${identity} ｜ 规则：全部`;
+        openModal({
+            title: '额度详情',
+            subtitle,
+            bodyHTML: `<pre>${escapeHTML(JSON.stringify(detail, null, 2))}</pre>`,
+            actionsHTML: '<button class="ghost" type="button" onclick="loadQuotaDetail()">刷新详情</button><button class="danger" type="button" onclick="resetQuota()">重置当前额度</button>',
+            compact: false
+        });
+    }
+
+    function setStatus(message, ok = true, title = '') {
+        showMessageModal(message, ok, title);
+    }
+
+    function clearStatus() {
+        closeModal();
+    }
+
+    function clearDetailSelection() {
+        selectedQuota = null;
+    }
+
+    function setSelectedQuota(identity, rule = '') {
+        selectedQuota = {identity: identity || '', rule: rule || ''};
+    }
+
+    function getSelectedQuota() {
+        const identity = selectedQuota?.identity?.trim?.() || '';
+        const rule = selectedQuota?.rule || '';
+        return {identity, rule};
+    }
+
+    function renderSummary(data) {
+        const summary = document.getElementById('summary');
+        summary.innerHTML = '';
+        const successMode = data.success_rule && data.success_rule.mode ? data.success_rule.mode : '默认';
+        const require2xx = data.success_rule && typeof data.success_rule.require_http_2xx !== 'undefined'
+            ? (data.success_rule.require_http_2xx ? '是' : '否')
+            : '未配置';
+        const cards = [
+            ['配置文件路径', data.config_path || '未获取到'],
+            ['上游地址', data.upstream?.target || '未配置'],
+            ['Redis', `${data.redis?.addr || '-'}\nDB：${data.redis?.db ?? '-'}`],
+            ['配额状态', `${data.quota?.enabled ? '已启用' : '已关闭'}\n时区：${data.quota?.timezone || '-'}`],
+            ['失败放行', data.quota?.fail_open ? '开启' : '关闭'],
+            ['身份识别', `${data.identity?.strategy || '-'}\n回退到 IP：${data.identity?.fallback_to_ip ? '是' : '否'}`],
+            ['规则数量', String((data.quota?.rules || []).length)],
+            ['成功判定', `模式：${successMode}\n要求 HTTP 2xx：${require2xx}`]
+        ];
+
+        for (const [label, value] of cards) {
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.innerHTML = `<div class="card-label">${escapeHTML(label)}</div><div class="card-value">${escapeHTML(value)}</div>`;
+            summary.appendChild(div);
+        }
+
+        const ruleFilter = document.getElementById('ruleFilter');
+        const options = ['<option value="">全部规则</option>']
+            .concat((data.rule_names || []).map(name => `<option value="${escapeAttr(name)}">${escapeHTML(name)}</option>`));
+        ruleFilter.innerHTML = options.join('');
+    }
+
+    function renderQuotas(data) {
+        document.getElementById('quotaMeta').textContent = `共 ${data.total} 条活跃记录，当前第 ${data.page} 页，每页 ${data.page_size} 条`;
+        document.getElementById('quotaRuleHint').textContent = data.filters?.rule ? `当前筛选规则：${data.filters.rule}` : '当前筛选规则：全部';
+        const tbody = document.getElementById('quotaRows');
+        const items = data.items || [];
+        const hasSelected = items.some(item => item.identity === selectedQuota?.identity && item.rule_name === selectedQuota?.rule);
+        if (!items.length) {
+            clearDetailSelection();
+            tbody.innerHTML = '<tr><td colspan="10" class="empty">当前条件下没有活跃额度记录。</td></tr>';
+            return;
+        }
+        if (!hasSelected && selectedQuota) {
+            clearDetailSelection();
+        }
+
+        tbody.innerHTML = '';
+        for (const item of items) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
       <td data-label="标识"><span class="mono">${escapeHTML(item.identity)}</span></td>
       <td class="short" data-label="类型"><span class="pill">${escapeHTML(item.identity_type)}</span></td>
       <td data-label="规则">${escapeHTML(item.rule_name)}</td>
@@ -1580,204 +2007,711 @@ function renderQuotas(data) {
           <button class="danger" type="button" onclick='resetQuota(${JSON.stringify(item.identity)}, ${JSON.stringify(item.rule_name)})'>重置</button>
         </div>
       </td>`;
-    tbody.appendChild(tr);
-  }
-}
-
-function selectQuota(identity, rule) {
-  switchTab('overview');
-  setSelectedQuota(identity, rule);
-  loadQuotaDetail();
-}
-
-async function loadSummary() {
-  const data = await request('/__admin/summary');
-  renderSummary(data);
-}
-
-async function loadQuotas(silent = false, loadingText = '正在加载额度列表...') {
-  const identity = encodeURIComponent(document.getElementById('identityFilter').value.trim());
-  const rule = encodeURIComponent(document.getElementById('ruleFilter').value);
-  const pageSize = encodeURIComponent(document.getElementById('pageSize').value || '20');
-  const data = await withQuotaTableLoading(
-    () => request(`/__admin/quotas?identity=${identity}&rule=${rule}&page_size=${pageSize}`),
-    loadingText
-  );
-  renderQuotas(data);
-  if (!silent) {
-    setStatus('活跃额度列表已刷新。', true, '查询完成');
-  }
-}
-
-async function loadQuotaDetail() {
-  switchTab('overview');
-  const { identity, rule } = getSelectedQuota();
-  if (!identity) {
-    setStatus('请先在列表中选择一条要查看的额度记录。', false, '未选择记录');
-    return;
-  }
-  const query = rule
-    ? `identity=${encodeURIComponent(identity)}&rule=${encodeURIComponent(rule)}`
-    : `identity=${encodeURIComponent(identity)}`;
-  const data = await request(`/__admin/quota?${query}`);
-  showQuotaDetailModal(data, identity, rule);
-}
-
-async function rejectQuota(identityArg, ruleArg) {
-  switchTab('overview');
-  if (typeof identityArg !== 'undefined') {
-    setSelectedQuota(identityArg, ruleArg || '');
-  }
-  const { identity, rule } = getSelectedQuota();
-  if (!identity) {
-    setStatus('请先在列表中选择一条要拒绝的额度记录。', false, '未选择记录');
-    return;
-  }
-  const confirmText = rule
-    ? `确认拒绝标识 ${identity} 在规则 ${rule} 下的剩余额度吗？`
-    : `确认拒绝标识 ${identity} 在全部规则下的剩余额度吗？`;
-  showConfirmModal(confirmText, async () => {
-    const data = await request('/__admin/quota/reject', {
-      method: 'POST',
-      body: JSON.stringify({ identity, rule })
-    });
-    await loadQuotas(true);
-    showMessageModal(data.message || '额度已拒绝。', true, '拒绝成功');
-  }, '确认拒绝');
-}
-
-async function resetQuota(identityArg, ruleArg) {
-  switchTab('overview');
-  if (typeof identityArg !== 'undefined') {
-    setSelectedQuota(identityArg, ruleArg || '');
-  }
-  const { identity, rule } = getSelectedQuota();
-  if (!identity) {
-    setStatus('请先在列表中选择一条要重置的额度记录。', false, '未选择记录');
-    return;
-  }
-  const confirmText = rule
-    ? `确认重置标识 ${identity} 在规则 ${rule} 下的额度吗？`
-    : `确认重置标识 ${identity} 在全部规则下的额度吗？`;
-  showConfirmModal(confirmText, async () => {
-    const data = await request('/__admin/quota/reset', {
-      method: 'POST',
-      body: JSON.stringify({ identity, rule })
-    });
-    await loadQuotas(true);
-    showMessageModal(data.message || '额度已重置。', true, '重置成功');
-  }, '确认重置');
-}
-
-async function loadConfig(silent = false) {
-  const data = await request('/__admin/config');
-  document.getElementById('configEditor').value = JSON.stringify(data.config, null, 2);
-  configLoaded = true;
-  if (!silent) {
-    setStatus('已加载当前配置。', true, '配置已加载');
-  }
-}
-
-function configPayload() {
-  return JSON.parse(document.getElementById('configEditor').value || '{}');
-}
-
-function formatConfigEditor() {
-  switchTab('config');
-  try {
-    document.getElementById('configEditor').value = JSON.stringify(configPayload(), null, 2);
-    setStatus('配置 JSON 已格式化。', true, '格式化完成');
-  } catch (err) {
-    setStatus('JSON 格式不正确，请检查后重试。', false, '格式化失败');
-  }
-}
-
-async function validateConfigPayload() {
-  switchTab('config');
-  const data = await request('/__admin/config/validate', {
-    method: 'POST',
-    body: JSON.stringify(configPayload())
-  });
-  setStatus(data.message || '配置校验通过。', true, '校验成功');
-}
-
-async function saveConfigPayload() {
-  switchTab('config');
-  showConfirmModal('确认保存当前配置并立即生效吗？', async () => {
-    const payload = configPayload();
-    await request('/__admin/config/validate', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    const data = await request('/__admin/config/save', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    await request('/__admin/config/reload', { method: 'POST' });
-    await boot(true);
-    setStatus(`${data.message || '配置已保存。'}\n文件：${data.config_path || '未知'}`, true, '保存成功');
-  }, '确认保存');
-}
-
-function toggleAutoRefresh() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-    stopAutoRefreshCountdown();
-    setStatus('自动刷新已关闭。', true, '设置已更新');
-    return;
-  }
-  startAutoRefreshCountdown();
-  autoRefreshTimer = setInterval(() => {
-    loadQuotas(true, '正在自动刷新额度列表...')
-      .then(() => {
-        autoRefreshRemaining = 10;
-        renderAutoRefreshButton();
-      })
-      .catch(err => setStatus(err.message || '自动刷新失败，请稍后重试。', false, '自动刷新失败'));
-  }, 10000);
-  renderAutoRefreshButton();
-  setStatus('自动刷新已开启，每 10 秒刷新一次活跃额度。', true, '设置已更新');
-}
-
-async function boot(silent = false) {
-  if (!isAuthed) {
-    clearSensitiveState();
-    updateAuthUI();
-    return;
-  }
-
-  try {
-    if (!silent) clearStatus();
-    clearDetailSelection();
-    await loadSummary();
-    await loadQuotas(true);
-    await loadConfig(true);
-    if (!silent) {
-      await switchTab(activeTab);
+            tbody.appendChild(tr);
+        }
     }
-  } catch (err) {
-    setStatus(err.message || '页面加载失败，请稍后重试。', false, '页面加载失败');
-  }
-}
 
-function initializeAuth() {
-  authCode = localStorage.getItem(authStorageKey) || '';
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlAuthCode = urlParams.get('api_key');
-  if (urlAuthCode) {
-    authCode = urlAuthCode.trim();
-  }
+    function selectQuota(identity, rule) {
+        switchTab('overview');
+        setSelectedQuota(identity, rule);
+        loadQuotaDetail();
+    }
 
-  updateAuthUI();
-  if (authCode) {
-    doAuth();
-  }
-}
+    async function loadSummary() {
+        const data = await request('/__admin/summary');
+        renderSummary(data);
+    }
 
-switchTab('overview');
-renderAutoRefreshButton();
-initializeAuth();
+    async function loadQuotas(silent = false, loadingText = '正在加载额度列表...') {
+        const identity = encodeURIComponent(document.getElementById('identityFilter').value.trim());
+        const rule = encodeURIComponent(document.getElementById('ruleFilter').value);
+        const pageSize = encodeURIComponent(document.getElementById('pageSize').value || '20');
+        const data = await withQuotaTableLoading(
+            () => request(`/__admin/quotas?identity=${identity}&rule=${rule}&page_size=${pageSize}`),
+            loadingText
+        );
+        renderQuotas(data);
+        if (!silent) {
+            setStatus('活跃额度列表已刷新。', true, '查询完成');
+        }
+    }
+
+    async function loadQuotaDetail() {
+        switchTab('overview');
+        const {identity, rule} = getSelectedQuota();
+        if (!identity) {
+            setStatus('请先在列表中选择一条要查看的额度记录。', false, '未选择记录');
+            return;
+        }
+        const query = rule
+            ? `identity=${encodeURIComponent(identity)}&rule=${encodeURIComponent(rule)}`
+            : `identity=${encodeURIComponent(identity)}`;
+        const data = await request(`/__admin/quota?${query}`);
+        showQuotaDetailModal(data, identity, rule);
+    }
+
+    async function rejectQuota(identityArg, ruleArg) {
+        switchTab('overview');
+        if (typeof identityArg !== 'undefined') {
+            setSelectedQuota(identityArg, ruleArg || '');
+        }
+        const {identity, rule} = getSelectedQuota();
+        if (!identity) {
+            setStatus('请先在列表中选择一条要拒绝的额度记录。', false, '未选择记录');
+            return;
+        }
+        const confirmText = rule
+            ? `确认拒绝标识 ${identity} 在规则 ${rule} 下的剩余额度吗？`
+            : `确认拒绝标识 ${identity} 在全部规则下的剩余额度吗？`;
+        showConfirmModal(confirmText, async () => {
+            const data = await request('/__admin/quota/reject', {
+                method: 'POST',
+                body: JSON.stringify({identity, rule})
+            });
+            await loadQuotas(true);
+            showMessageModal(data.message || '额度已拒绝。', true, '拒绝成功');
+        }, '确认拒绝');
+    }
+
+    async function resetQuota(identityArg, ruleArg) {
+        switchTab('overview');
+        if (typeof identityArg !== 'undefined') {
+            setSelectedQuota(identityArg, ruleArg || '');
+        }
+        const {identity, rule} = getSelectedQuota();
+        if (!identity) {
+            setStatus('请先在列表中选择一条要重置的额度记录。', false, '未选择记录');
+            return;
+        }
+        const confirmText = rule
+            ? `确认重置标识 ${identity} 在规则 ${rule} 下的额度吗？`
+            : `确认重置标识 ${identity} 在全部规则下的额度吗？`;
+        showConfirmModal(confirmText, async () => {
+            const data = await request('/__admin/quota/reset', {
+                method: 'POST',
+                body: JSON.stringify({identity, rule})
+            });
+            await loadQuotas(true);
+            showMessageModal(data.message || '额度已重置。', true, '重置成功');
+        }, '确认重置');
+    }
+
+    async function loadConfig(silent = false) {
+        const data = await request('/__admin/config');
+        configState = normalizeConfig(data.config || {});
+        syncJsonEditorFromState();
+        renderConfigVisualEditor(configState);
+        renderConfigEditMode();
+        configLoaded = true;
+        if (!silent) {
+            setStatus('已加载当前配置。', true, '配置已加载');
+        }
+    }
+
+    function cloneConfigValue(value) {
+        return JSON.parse(JSON.stringify(value ?? {}));
+    }
+
+    function normalizeConfig(config) {
+        const cfg = cloneConfigValue(config);
+        cfg.server ||= {};
+        cfg.upstream ||= {};
+        cfg.redis ||= {};
+        cfg.identity ||= {};
+        cfg.identity.extractors = Array.isArray(cfg.identity.extractors) ? cfg.identity.extractors : [];
+        cfg.quota ||= {};
+        cfg.quota.exclude_paths = Array.isArray(cfg.quota.exclude_paths) ? cfg.quota.exclude_paths : [];
+        cfg.quota.rules = Array.isArray(cfg.quota.rules) ? cfg.quota.rules : [];
+        cfg.quota.rules.forEach(rule => {
+            rule.include_paths = Array.isArray(rule.include_paths) ? rule.include_paths : [];
+            rule.request_match ||= {};
+        });
+        cfg.success_rule ||= {};
+        cfg.logging ||= {};
+        cfg.admin ||= {};
+        return cfg;
+    }
+
+    function pathParts(path) {
+        return String(path).split('.').map(part => /^\d+$/.test(part) ? Number(part) : part);
+    }
+
+    function getByPath(obj, path) {
+        return pathParts(path).reduce((acc, part) => acc == null ? undefined : acc[part], obj);
+    }
+
+    function setByPath(obj, path, value) {
+        const parts = pathParts(path);
+        let target = obj;
+        for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i];
+            const nextPart = parts[i + 1];
+            if (target[part] == null) target[part] = typeof nextPart === 'number' ? [] : {};
+            target = target[part];
+        }
+        target[parts[parts.length - 1]] = value;
+    }
+
+    function deleteByPath(obj, path) {
+        const parts = pathParts(path);
+        const key = parts.pop();
+        const target = parts.reduce((acc, part) => acc == null ? undefined : acc[part], obj);
+        if (target && Object.prototype.hasOwnProperty.call(target, key)) delete target[key];
+    }
+
+    function ensureArray(path) {
+        let arr = getByPath(configState, path);
+        if (!Array.isArray(arr)) {
+            arr = [];
+            setByPath(configState, path, arr);
+        }
+        return arr;
+    }
+
+    function configValueChanged() {
+        clearConfigError();
+    }
+
+    function setConfigValue(path, value, type = 'text') {
+        let next = value;
+        if (type === 'number') next = value === '' ? 0 : Number(value);
+        if (type === 'bool') next = value === true || value === 'true';
+        setByPath(configState, path, next);
+        configValueChanged();
+    }
+
+    function setConfigValueAndRender(path, value, type = 'text') {
+        setConfigValue(path, value, type);
+        renderConfigVisualEditor(configState);
+    }
+
+    function cleanConfigForSubmit(value) {
+        const cfg = normalizeConfig(value);
+        (cfg.quota.rules || []).forEach(rule => {
+            Object.entries(rule.request_match || {}).forEach(([key, matcher]) => {
+                const include = Array.isArray(matcher?.include) ? matcher.include.filter(item => item !== '') : [];
+                const exclude = Array.isArray(matcher?.exclude) ? matcher.exclude.filter(item => item !== '') : [];
+                if (include.length === 0 && exclude.length === 0) {
+                    delete rule.request_match[key];
+                } else {
+                    matcher.include = include;
+                    matcher.exclude = exclude;
+                }
+            });
+        });
+        return cfg;
+    }
+
+    function syncJsonEditorFromState() {
+        const editor = document.getElementById('configEditor');
+        if (editor) editor.value = JSON.stringify(cleanConfigForSubmit(configState), null, 2);
+    }
+
+    function clearConfigError() {
+        const box = document.getElementById('configErrorBox');
+        if (!box) return;
+        box.textContent = '';
+        box.classList.add('config-hidden');
+    }
+
+    function showConfigError(message) {
+        const box = document.getElementById('configErrorBox');
+        if (!box) return;
+        box.textContent = message;
+        box.classList.remove('config-hidden');
+    }
+
+    function configTip(text) {
+        return text ? `<div class="config-field-tip">${escapeHTML(text)}</div>` : '';
+    }
+
+    function configInput(path, label, value, type = 'text', attrs = '', tip = '') {
+        return `
+    <div class="field">
+      <label>${escapeHTML(label)}</label>
+      <input type="${type}" value="${escapeAttr(value ?? '')}" autocomplete="off" ${attrs} oninput="setConfigValue('${path}', this.value, '${type === 'number' ? 'number' : 'text'}')" />
+      ${configTip(tip)}
+    </div>`;
+    }
+
+    function configSelect(path, label, value, options, tip = '') {
+        return `
+    <div class="field">
+      <label>${escapeHTML(label)}</label>
+      <select onchange="setConfigValueAndRender('${path}', this.value)">
+        ${options.map(option => `<option value="${escapeAttr(option)}" ${value === option ? 'selected' : ''}>${escapeHTML(option)}</option>`).join('')}
+      </select>
+      ${configTip(tip)}
+    </div>`;
+    }
+
+    function configSwitch(path, label, checked, tip = '') {
+        return `
+    <div class="field">
+      <label>${escapeHTML(label)}</label>
+      <label class="config-switch">
+        <input type="checkbox" ${checked ? 'checked' : ''} onchange="setConfigValue('${path}', this.checked, 'bool')" />
+        <span>${checked ? '启用' : '关闭'}</span>
+      </label>
+      ${configTip(tip)}
+    </div>`;
+    }
+
+    function renderConfigCard(title, desc, content) {
+        return `
+    <div class="config-card">
+      <div class="config-card-head">
+        <div>
+          <div class="config-card-title">${escapeHTML(title)}</div>
+          <div class="config-card-desc">${escapeHTML(desc)}</div>
+        </div>
+      </div>
+      ${content}
+    </div>`;
+    }
+
+    function renderSubCard(title, desc, actions, content) {
+        return `
+    <div class="config-subcard">
+      <div class="config-subcard-head">
+        <div>
+          <div class="config-subcard-title">${escapeHTML(title)}</div>
+          ${desc ? `<div class="config-subcard-desc">${escapeHTML(desc)}</div>` : ''}
+        </div>
+        <div class="config-inline-actions">${actions || ''}</div>
+      </div>
+      ${content}
+    </div>`;
+    }
+
+    function renderStringList(path, label, placeholder = '', tip = '') {
+        const items = ensureArray(path);
+        return `
+    <div class="config-stack-inner">
+      <div>
+        <div class="config-card-title">${escapeHTML(label)}</div>
+        ${configTip(tip)}
+      </div>
+      <div class="config-row-list">
+        ${items.map((item, index) => `
+          <div class="config-row">
+            <input value="${escapeAttr(item)}" placeholder="${escapeAttr(placeholder)}" oninput="setStringListItem('${path}', ${index}, this.value)" />
+            <button class="ghost config-small-btn" type="button" onclick="removeStringListItem('${path}', ${index})">删除</button>
+          </div>`).join('')}
+      </div>
+      <div><button class="ghost config-small-btn" type="button" onclick="addStringListItem('${path}')">添加</button></div>
+    </div>`;
+    }
+
+    function setStringListItem(path, index, value) {
+        ensureArray(path)[index] = value;
+        configValueChanged();
+    }
+
+    function addStringListItem(path, value = '') {
+        ensureArray(path).push(value);
+        renderConfigVisualEditor(configState);
+    }
+
+    function removeStringListItem(path, index) {
+        ensureArray(path).splice(index, 1);
+        renderConfigVisualEditor(configState);
+    }
+
+    function moveArrayItem(path, index, direction) {
+        const arr = ensureArray(path);
+        const next = index + direction;
+        if (next < 0 || next >= arr.length) return;
+        [arr[index], arr[next]] = [arr[next], arr[index]];
+        renderConfigVisualEditor(configState);
+    }
+
+    function removeArrayItem(path, index) {
+        ensureArray(path).splice(index, 1);
+        renderConfigVisualEditor(configState);
+    }
+
+    function addExtractor() {
+        ensureArray('identity.extractors').push({source: 'header', key: '', regex: '', group: 0, name: ''});
+        renderConfigVisualEditor(configState);
+    }
+
+    function addQuotaRule() {
+        ensureArray('quota.rules').push({
+            name: '',
+            window: 'day',
+            window_count: 1,
+            success_limit: 10,
+            include_paths: [],
+            request_match: {}
+        });
+        renderConfigVisualEditor(configState);
+    }
+
+    function toggleMatcher(ruleIndex, matcherKey, enabled) {
+        const path = `quota.rules.${ruleIndex}.request_match.${matcherKey}`;
+        if (enabled) {
+            setByPath(configState, path, {include: [], exclude: []});
+        } else {
+            deleteByPath(configState, path);
+        }
+        renderConfigVisualEditor(configState);
+    }
+
+    function setQuotaExceededBodyMode(ruleIndex, mode) {
+        const path = `quota.rules.${ruleIndex}.quota_exceeded_body`;
+        if (mode === 'default') {
+            deleteByPath(configState, path);
+        } else if (mode === 'empty') {
+            setByPath(configState, path, '');
+        } else {
+            const current = getByPath(configState, path);
+            setByPath(configState, path, current ? current : '请求过于频繁，请稍后再试');
+        }
+        renderConfigVisualEditor(configState);
+    }
+
+    function setQuotaExceededBody(ruleIndex, value) {
+        setByPath(configState, `quota.rules.${ruleIndex}.quota_exceeded_body`, value);
+        configValueChanged();
+    }
+
+    function renderExtractors() {
+        const extractors = ensureArray('identity.extractors');
+        return `
+    <div class="config-stack-inner">
+      ${extractors.map((item, index) => {
+            const base = `identity.extractors.${index}`;
+            const source = item.source || 'header';
+            const actions = `
+          <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('identity.extractors', ${index}, -1)">上移</button>
+          <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('identity.extractors', ${index}, 1)">下移</button>
+          <button class="danger config-small-btn" type="button" onclick="removeArrayItem('identity.extractors', ${index})">删除</button>`;
+            return renderSubCard(`Extractor #${index + 1}`, source === 'ip' ? '使用客户端 IP 作为身份来源' : '按顺序提取身份，顺序会影响匹配结果', actions, `
+          <div class="config-fields">
+            ${configSelect(`${base}.source`, 'source', source, ['header', 'query', 'cookie', 'ip'], '身份值来源：请求头、URL 参数、Cookie 或客户端 IP。')}
+            ${configInput(`${base}.key`, 'key', item.key, 'text', source === 'ip' ? 'disabled' : '', '要读取的字段名；source=ip 时不需要填写。')}
+            ${configInput(`${base}.name`, 'name', item.name, 'text', '', '输出身份前缀，例如 member_id:123 中的 member_id。')}
+            ${configInput(`${base}.regex`, 'regex', item.regex, 'text', '', '可选：用正则从原始值中提取子串。')}
+            ${configInput(`${base}.group`, 'group', item.group ?? 0, 'number', 'min="0"', 'regex 的捕获组序号；不使用 regex 时必须为 0。')}
+          </div>`);
+        }).join('')}
+      <div><button class="ghost" type="button" onclick="addExtractor()">添加身份提取器</button></div>
+    </div>`;
+    }
+
+    function renderMatcher(ruleIndex, matcherKey, title) {
+        const matcherPath = `quota.rules.${ruleIndex}.request_match.${matcherKey}`;
+        const matcher = getByPath(configState, matcherPath);
+        const enabled = !!matcher;
+        const content = enabled ? `
+    ${renderStringList(`${matcherPath}.include`, 'include 正则', '命中任意 include 即通过', '配置后必须至少命中一个 include；为空表示不限制 include 条件。')}
+    ${renderStringList(`${matcherPath}.exclude`, 'exclude 正则', '命中任意 exclude 即排除', 'exclude 优先级更高，任意一条命中都会跳过该规则。')}` : '<div class="config-help">未启用该匹配器。</div>';
+        return renderSubCard(title, 'include/exclude 均使用正则表达式', `
+    <label class="config-switch">
+      <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleMatcher(${ruleIndex}, '${matcherKey}', this.checked)" />
+      <span>${enabled ? '启用' : '关闭'}</span>
+    </label>`, content);
+    }
+
+    function renderQuotaRules() {
+        const rules = ensureArray('quota.rules');
+        return `
+    <div class="config-stack-inner">
+      ${rules.map((rule, index) => {
+            rule.include_paths = Array.isArray(rule.include_paths) ? rule.include_paths : [];
+            rule.request_match ||= {};
+            const base = `quota.rules.${index}`;
+            const bodyUnset = rule.quota_exceeded_body === undefined || rule.quota_exceeded_body === null;
+            const bodyMode = bodyUnset ? 'default' : (rule.quota_exceeded_body === '' ? 'empty' : 'custom');
+            const actions = `
+          <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('quota.rules', ${index}, -1)">上移</button>
+          <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('quota.rules', ${index}, 1)">下移</button>
+          <button class="danger config-small-btn" type="button" onclick="removeArrayItem('quota.rules', ${index})">删除</button>`;
+            return renderSubCard(rule.name || `Rule #${index + 1}`, '规则按顺序匹配，命中第一条后停止', actions, `
+          <div class="config-fields">
+            ${configInput(`${base}.name`, 'name', rule.name, 'text', '', '规则名称必须唯一，会用于额度统计和管理页面筛选。')}
+            ${configSelect(`${base}.window`, 'window', rule.window || 'day', ['minute', 'hour', 'day'], '额度统计窗口单位：分钟、小时或天。')}
+            ${configInput(`${base}.window_count`, 'window_count', rule.window_count ?? 1, 'number', 'min="1"', '窗口数量，例如 window=day 且 count=7 表示 7 天一个周期。')}
+            ${configInput(`${base}.success_limit`, 'success_limit', rule.success_limit ?? 0, 'number', 'min="0"', '当前窗口内允许的成功请求次数上限。')}
+          </div>
+          ${renderStringList(`${base}.include_paths`, 'include_paths', '/api/**', '命中这些路径时应用本规则；支持 /api/** 这类前缀通配写法。')}
+          <div class="config-stack-inner">
+            <div>
+              <div class="config-card-title">quota_exceeded_body</div>
+              <div class="config-field-tip">超出额度时返回的响应内容：默认响应、空响应体或自定义 JSON/文本。</div>
+            </div>
+            <div class="config-fields">
+              <div class="field">
+                <label>响应方式</label>
+                <select onchange="setQuotaExceededBodyMode(${index}, this.value)">
+                  <option value="default" ${bodyMode === 'default' ? 'selected' : ''}>使用默认响应</option>
+                  <option value="empty" ${bodyMode === 'empty' ? 'selected' : ''}>返回空响应体</option>
+                  <option value="custom" ${bodyMode === 'custom' ? 'selected' : ''}>自定义响应内容</option>
+                </select>
+                <div class="config-field-tip">空响应体会返回 429 状态码但不写入 body。</div>
+              </div>
+            </div>
+            ${bodyMode === 'custom' ? `<textarea class="config-compact-textarea" spellcheck="false" placeholder="可填写纯文本或 JSON 字符串" oninput="setQuotaExceededBody(${index}, this.value)">${escapeHTML(rule.quota_exceeded_body ?? '')}</textarea>` : ''}
+          </div>
+          <div class="config-stack-inner">
+            <div>
+              <div class="config-card-title">request_match</div>
+              <div class="config-field-tip">在路径命中后继续按请求内容匹配；启用某类匹配器后至少需要一条 include 或 exclude。</div>
+            </div>
+            ${renderMatcher(index, 'query_form', 'Query/Form')}
+            ${renderMatcher(index, 'json_body', 'JSON Body')}
+            ${renderMatcher(index, 'headers', 'Headers')}
+            ${renderMatcher(index, 'ip', 'IP')}
+          </div>`);
+        }).join('')}
+      <div><button class="ghost" type="button" onclick="addQuotaRule()">添加配额规则</button></div>
+    </div>`;
+    }
+
+    function renderConfigVisualEditor(config) {
+        const target = document.getElementById('configVisualEditor');
+        if (!target) return;
+        configState = normalizeConfig(config);
+        const cfg = configState;
+        target.innerHTML = [
+            renderConfigCard('Server', '服务监听与请求体限制', `<div class="config-fields">
+      ${configInput('server.port', 'port', cfg.server.port, 'number', 'min="1"', '服务监听端口，修改后保存并热加载才会影响新启动监听。')}
+      ${configInput('server.read_timeout', 'read_timeout', cfg.server.read_timeout, 'text', '', '读取请求头和请求体的最长时间，用于防慢请求。')}
+      ${configInput('server.idle_timeout', 'idle_timeout', cfg.server.idle_timeout, 'text', '', 'HTTP keep-alive 空闲连接保留时间。')}
+      ${configInput('server.max_body_size', 'max_body_size', cfg.server.max_body_size, 'number', 'min="0"', '允许代理读取的最大请求/响应体字节数。')}
+    </div><div class="config-help">时间格式示例：10s、500ms、1m。</div>`),
+            renderConfigCard('Upstream', '上游服务与响应超时', `<div class="config-fields">
+      ${configInput('upstream.target', 'target', cfg.upstream.target, 'text', '', '真实后端服务地址，代理会把请求转发到这里。')}
+      ${configInput('upstream.response_timeout', 'response_timeout', cfg.upstream.response_timeout, 'text', '', '等待上游返回响应头的最长时间，长耗时接口可适当调大。')}
+    </div>`),
+            renderConfigCard('Redis', '额度存储连接配置', `<div class="config-fields">
+      ${configInput('redis.addr', 'addr', cfg.redis.addr, 'text', '', 'Redis 地址，格式通常为 host:port。')}
+      ${configInput('redis.password', 'password', cfg.redis.password, 'text', '', 'Redis 密码；无密码时留空。')}
+      ${configInput('redis.db', 'db', cfg.redis.db, 'number', 'min="0"', 'Redis 数据库编号。')}
+    </div>`),
+            renderConfigCard('Identity', '身份识别与提取器配置', `<div class="config-fields">
+      ${configSelect('identity.strategy', 'strategy', cfg.identity.strategy || 'header_priority', ['header_priority', 'merge_all'], 'header_priority 取第一个命中的身份；merge_all 会把所有提取器结果拼接成联合身份。')}
+      ${configSwitch('identity.fallback_to_ip', 'fallback_to_ip', !!cfg.identity.fallback_to_ip, '所有提取器都未命中时，是否用客户端 IP 作为兜底身份。')}
+    </div>${renderExtractors()}`),
+            renderConfigCard('Quota', '配额开关、路径排除与规则配置', `<div class="config-fields">
+      ${configSwitch('quota.enabled', 'enabled', !!cfg.quota.enabled, '关闭后不执行额度限制，但代理仍会转发请求。')}
+      ${configInput('quota.timezone', 'timezone', cfg.quota.timezone, 'text', '', '用于 day/hour/minute 窗口边界计算的时区，例如 Asia/Shanghai。')}
+      ${configSwitch('quota.fail_open', 'fail_open', !!cfg.quota.fail_open, 'Redis 或额度服务异常时是否放行请求；开启更可用，关闭更严格。')}
+    </div>${renderStringList('quota.exclude_paths', 'exclude_paths', '/health', '这些路径永远不做额度检查，优先级高于所有规则。')}${renderQuotaRules()}`),
+            renderConfigCard('Success Rule', '成功请求判定规则', `<div class="config-fields">
+      ${configSelect('success_rule.mode', 'mode', cfg.success_rule.mode || 'status_code', ['status_code', 'json_field'], 'status_code 按 HTTP 2xx 判断成功；json_field 按响应 JSON 字段值判断成功。')}
+      ${configSwitch('success_rule.require_http_2xx', 'require_http_2xx', !!cfg.success_rule.require_http_2xx, 'JSON 字段判断时，是否仍要求 HTTP 状态码为 2xx。')}
+      ${configInput('success_rule.json_field', 'json_field', cfg.success_rule.json_field, 'text', '', 'mode=json_field 时读取的响应 JSON 字段名，例如 code。')}
+      ${configInput('success_rule.expected_value', 'expected_value', cfg.success_rule.expected_value ?? 0, 'number', '', 'mode=json_field 时认为成功的字段值，例如 0。')}
+    </div>`),
+            renderConfigCard('Logging', '日志级别与访问日志开关', `<div class="config-fields">
+      ${configSelect('logging.level', 'level', cfg.logging.level || 'info', ['debug', 'info', 'warn', 'error'], '日志详细程度，debug 最详细，error 最少。')}
+      ${configSwitch('logging.access_log', 'access_log', !!cfg.logging.access_log, '是否记录每个访问请求的日志。')}
+    </div>`),
+            renderConfigCard('Admin', '管理面板鉴权配置', `<div class="config-fields">
+      ${configInput('admin.api_key', 'api_key', cfg.admin.api_key, 'text', '', '管理接口和页面登录密钥，请妥善保存。')}
+    </div>`)
+        ].join('');
+    }
+
+    function clientValidateConfig(payload) {
+        const errors = [];
+        if (!payload.upstream?.target) errors.push('upstream.target 不能为空');
+        if (!payload.redis?.addr) errors.push('redis.addr 不能为空');
+        const names = new Set();
+        (payload.identity?.extractors || []).forEach((item, index) => {
+            const source = item.source || 'header';
+            if (!item.name) errors.push(`identity.extractors[${index}].name 不能为空`);
+            if (source !== 'ip' && !item.key) errors.push(`identity.extractors[${index}].key 不能为空`);
+            if (!item.regex && Number(item.group || 0) !== 0) errors.push(`identity.extractors[${index}].regex 为空时 group 必须为 0`);
+        });
+        (payload.quota?.rules || []).forEach((rule, index) => {
+            if (!rule.name) errors.push(`quota.rules[${index}].name 不能为空`);
+            if (rule.name && names.has(rule.name)) errors.push(`quota.rules[${index}].name 重复：${rule.name}`);
+            names.add(rule.name);
+            if (Number(rule.window_count || 0) < 1) errors.push(`quota.rules[${index}].window_count 必须大于等于 1`);
+            Object.entries(rule.request_match || {}).forEach(([key, matcher]) => {
+                const includeCount = Array.isArray(matcher?.include) ? matcher.include.filter(Boolean).length : 0;
+                const excludeCount = Array.isArray(matcher?.exclude) ? matcher.exclude.filter(Boolean).length : 0;
+                if (includeCount + excludeCount === 0) delete rule.request_match[key];
+            });
+        });
+        return errors;
+    }
+
+    function renderConfigEditMode() {
+        const visual = document.getElementById('configVisualEditor');
+        const json = document.getElementById('configJsonEditor');
+        const visualBtn = document.getElementById('configModeVisual');
+        const jsonBtn = document.getElementById('configModeJson');
+        const formatBtn = document.getElementById('formatConfigBtn');
+        if (visual) visual.classList.toggle('config-hidden', configEditMode !== 'visual');
+        if (json) json.classList.toggle('config-hidden', configEditMode !== 'json');
+        if (visualBtn) visualBtn.classList.toggle('active', configEditMode === 'visual');
+        if (jsonBtn) jsonBtn.classList.toggle('active', configEditMode === 'json');
+        if (formatBtn) formatBtn.hidden = configEditMode !== 'json';
+    }
+
+    function switchConfigEditMode(mode) {
+        switchTab('config');
+        if (mode === configEditMode) return;
+        try {
+            if (mode === 'json') {
+                syncJsonEditorFromState();
+            } else {
+                configState = normalizeConfig(JSON.parse(document.getElementById('configEditor').value || '{}'));
+                renderConfigVisualEditor(configState);
+            }
+            configEditMode = mode;
+            clearConfigError();
+            renderConfigEditMode();
+        } catch (err) {
+            showConfigError('JSON 格式不正确，请检查后再切换到可视化编辑。');
+            setStatus('JSON 格式不正确，请检查后再切换。', false, '切换失败');
+        }
+    }
+
+    function configPayload() {
+        if (configEditMode === 'json') {
+            configState = normalizeConfig(JSON.parse(document.getElementById('configEditor').value || '{}'));
+        }
+        const payload = cleanConfigForSubmit(configState);
+        const errors = clientValidateConfig(payload);
+        if (errors.length) {
+            showConfigError(errors.join('\n'));
+            throw new Error(errors[0]);
+        }
+        clearConfigError();
+        configState = payload;
+        return payload;
+    }
+
+    function formatConfigEditor() {
+        switchTab('config');
+        try {
+            if (configEditMode === 'json') {
+                configState = normalizeConfig(JSON.parse(document.getElementById('configEditor').value || '{}'));
+            }
+            configEditMode = 'json';
+            syncJsonEditorFromState();
+            renderConfigEditMode();
+            clearConfigError();
+            setStatus('配置 JSON 已格式化。', true, '格式化完成');
+        } catch (err) {
+            showConfigError('JSON 格式不正确，请检查后重试。');
+            setStatus('JSON 格式不正确，请检查后重试。', false, '格式化失败');
+        }
+    }
+
+    function configErrorMessage(err, fallback = '配置操作失败，请检查后重试。') {
+        const detail = err?.detail || err?.data?.detail || '';
+        const message = err?.message || fallback;
+        return detail && detail !== message ? `${message}\n${detail}` : message;
+    }
+
+    async function validateConfigPayload() {
+        switchTab('config');
+        try {
+            const payload = configPayload();
+            const data = await request('/__admin/config/validate', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            clearConfigError();
+            setStatus(data.message || '配置校验通过。', true, '校验成功');
+        } catch (err) {
+            const message = configErrorMessage(err, '配置校验失败。');
+            showConfigError(message);
+            setStatus(message, false, '配置校验失败');
+        }
+    }
+
+    async function saveConfigPayload() {
+        switchTab('config');
+        let payload;
+        try {
+            payload = configPayload();
+        } catch (err) {
+            const message = configErrorMessage(err, '配置格式不正确，请检查后重试。');
+            showConfigError(message);
+            setStatus(message, false, '配置校验失败');
+            return;
+        }
+        showConfirmModal('确认保存当前配置并立即生效吗？', async () => {
+            await request('/__admin/config/validate', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            const data = await request('/__admin/config/save', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            await request('/__admin/config/reload', {method: 'POST'});
+            await boot(true);
+            setStatus(`${data.message || '配置已保存。'}\n文件：${data.config_path || '未知'}`, true, '保存成功');
+        }, '确认保存');
+    }
+
+    function toggleAutoRefresh() {
+        if (autoRefreshTimer) {
+            clearInterval(autoRefreshTimer);
+            autoRefreshTimer = null;
+            stopAutoRefreshCountdown();
+            setStatus('自动刷新已关闭。', true, '设置已更新');
+            return;
+        }
+        startAutoRefreshCountdown();
+        autoRefreshTimer = setInterval(() => {
+            loadQuotas(true, '正在自动刷新额度列表...')
+                .then(() => {
+                    autoRefreshRemaining = 10;
+                    renderAutoRefreshButton();
+                })
+                .catch(err => setStatus(err.message || '自动刷新失败，请稍后重试。', false, '自动刷新失败'));
+        }, 10000);
+        renderAutoRefreshButton();
+        setStatus('自动刷新已开启，每 10 秒刷新一次活跃额度。', true, '设置已更新');
+    }
+
+    async function boot(silent = false) {
+        if (!isAuthed) {
+            clearSensitiveState();
+            updateAuthUI();
+            return;
+        }
+
+        try {
+            if (!silent) clearStatus();
+            clearDetailSelection();
+            await loadSummary();
+            await loadQuotas(true);
+            await loadConfig(true);
+            if (!silent) {
+                await switchTab(activeTab);
+            }
+        } catch (err) {
+            setStatus(err.message || '页面加载失败，请稍后重试。', false, '页面加载失败');
+        }
+    }
+
+    function initializeAuth() {
+        authCode = localStorage.getItem(authStorageKey) || '';
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlAuthCode = urlParams.get('api_key');
+        if (urlAuthCode) {
+            authCode = urlAuthCode.trim();
+        }
+
+        updateAuthUI();
+        if (authCode) {
+            doAuth();
+        }
+    }
+
+    switchTab('overview');
+    renderAutoRefreshButton();
+    initializeAuth();
 </script>
 </body>
 </html>
