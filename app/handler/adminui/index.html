@@ -872,10 +872,43 @@
             font-size: 13px;
         }
 
-        .detail-stack,
-        .config-stack {
+        .detail-stack {
             display: grid;
             gap: 16px;
+        }
+
+        .config-stack {
+            display: grid;
+            gap: 0;
+        }
+
+        #panel-config.active {
+            padding-bottom: 118px;
+        }
+
+        .config-toolbar-slot {
+            min-height: 0;
+        }
+
+        .config-toolbar {
+            position: fixed;
+            left: 50%;
+            bottom: 24px;
+            transform: translateX(-50%);
+            z-index: 40;
+            width: min(1360px, calc(100vw - 32px));
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .config-toolbar .toolbar-box {
+            pointer-events: auto;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(12px);
+            box-shadow: var(--shadow-lg);
+            padding: 16px 18px;
         }
 
         .config-topbar {
@@ -914,6 +947,31 @@
             gap: 8px;
             flex-wrap: wrap;
             align-items: center;
+        }
+
+        #saveConfigBtn {
+            position: relative;
+        }
+
+        #saveConfigBtn::after {
+            content: "";
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--danger);
+            border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35);
+            opacity: 0;
+            transform: scale(0.7);
+            transition: opacity .15s ease, transform .15s ease;
+        }
+
+        #saveConfigBtn.dirty::after {
+            opacity: 1;
+            transform: scale(1);
         }
 
         .config-visual {
@@ -1061,6 +1119,36 @@
             font-size: 12.5px;
         }
 
+        .back-to-top {
+            position: fixed;
+            right: 24px;
+            bottom: 48px;
+            z-index: 45;
+            width: 46px;
+            height: 46px;
+            border-radius: 999px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+            transition: opacity .18s ease, transform .18s ease;
+        }
+
+        .back-to-top.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .back-to-top svg {
+            width: 20px;
+            height: 20px;
+        }
+
         .editor-wrap {
             border: 1px solid var(--border);
             border-radius: var(--radius);
@@ -1133,6 +1221,33 @@
 
             .toolbar-box {
                 padding: 12px;
+            }
+
+            .config-toolbar {
+                bottom: 12px;
+                width: calc(100vw - 24px);
+                padding: 0;
+            }
+
+            .config-topbar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            .config-mode-tabs,
+            .config-actions {
+                width: 100%;
+            }
+
+            .config-mode-tabs button,
+            .config-actions button {
+                flex: 1 1 0;
+            }
+
+            .back-to-top {
+                right: 16px;
+                bottom: 180px;
             }
 
             .toolbar {
@@ -1492,20 +1607,23 @@
                 </div>
 
                 <div class="config-stack">
-                    <div class="toolbar-box">
-                        <div class="config-topbar">
-                            <div class="config-mode-tabs" role="tablist" aria-label="配置编辑模式">
-                                <button id="configModeVisual" type="button" onclick="switchConfigEditMode('visual')">
-                                    可视化编辑
-                                </button>
-                                <button id="configModeJson" type="button" onclick="switchConfigEditMode('json')">JSON
-                                    编辑
-                                </button>
-                            </div>
-                            <div class="config-actions">
-                                <button onclick="saveConfigPayload()">保存配置</button>
-                                <button id="formatConfigBtn" class="ghost" onclick="formatConfigEditor()">格式化 JSON
-                                </button>
+                    <div class="config-toolbar-slot"></div>
+                    <div class="config-toolbar">
+                        <div class="toolbar-box">
+                            <div class="config-topbar">
+                                <div class="config-mode-tabs" role="tablist" aria-label="配置编辑模式">
+                                    <button id="configModeVisual" type="button" onclick="switchConfigEditMode('visual')">
+                                        可视化编辑
+                                    </button>
+                                    <button id="configModeJson" type="button" onclick="switchConfigEditMode('json')">JSON
+                                        编辑
+                                    </button>
+                                </div>
+                                <div class="config-actions">
+                                    <button id="saveConfigBtn" onclick="saveConfigPayload()">保存配置</button>
+                                    <button id="formatConfigBtn" class="ghost" onclick="formatConfigEditor()">格式化 JSON
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1518,13 +1636,18 @@
                             <strong>当前配置</strong>
                             <span>JSON 格式 · 全部字段可见可编辑（含敏感字段）</span>
                         </div>
-                        <textarea id="configEditor" spellcheck="false"></textarea>
+                        <textarea id="configEditor" spellcheck="false" oninput="configValueChanged()"></textarea>
                     </div>
                 </div>
             </section>
         </div>
     </div>
 </main>
+<button id="backToTopBtn" class="back-to-top" type="button" aria-label="回到顶部" title="回到顶部" onclick="scrollToTop()">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 5L5 12M12 5L19 12M12 5V19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+</button>
 <div id="appModal" class="modal-mask" onclick="handleModalMaskClick(event)">
     <div id="appModalDialog" class="modal compact" role="dialog" aria-modal="true" aria-labelledby="appModalTitle">
         <div class="modal-head">
@@ -1572,6 +1695,17 @@
         if (btn) {
             btn.textContent = getAutoRefreshButtonText();
         }
+    }
+
+    function renderBackToTopButton() {
+        const btn = document.getElementById('backToTopBtn');
+        if (btn) {
+            btn.classList.toggle('show', window.scrollY > 360);
+        }
+    }
+
+    function scrollToTop() {
+        window.scrollTo({top: 0, behavior: 'smooth'});
     }
 
     function setAuthError(message = '') {
@@ -2102,6 +2236,7 @@
         syncJsonEditorFromState();
         renderConfigVisualEditor(configState);
         renderConfigEditMode();
+        markConfigSaved();
         configLoaded = true;
         if (!silent) {
             setStatus('已加载当前配置。', true, '配置已加载');
@@ -2170,6 +2305,7 @@
 
     function configValueChanged() {
         clearConfigError();
+        markConfigDirty();
     }
 
     function setConfigValue(path, value, type = 'text') {
@@ -2205,6 +2341,21 @@
     function syncJsonEditorFromState() {
         const editor = document.getElementById('configEditor');
         if (editor) editor.value = JSON.stringify(cleanConfigForSubmit(configState), null, 2);
+    }
+
+    function updateConfigSaveState(saved) {
+        const saveBtn = document.getElementById('saveConfigBtn');
+        if (saveBtn) {
+            saveBtn.classList.toggle('dirty', !saved);
+        }
+    }
+
+    function markConfigDirty() {
+        updateConfigSaveState(false);
+    }
+
+    function markConfigSaved() {
+        updateConfigSaveState(true);
     }
 
     function clearConfigError() {
@@ -2311,11 +2462,13 @@
     function addStringListItem(path, value = '') {
         ensureArray(path).push(value);
         renderConfigVisualEditor(configState);
+        markConfigDirty();
     }
 
     function removeStringListItem(path, index) {
         ensureArray(path).splice(index, 1);
         renderConfigVisualEditor(configState);
+        markConfigDirty();
     }
 
     function moveArrayItem(path, index, direction) {
@@ -2324,16 +2477,19 @@
         if (next < 0 || next >= arr.length) return;
         [arr[index], arr[next]] = [arr[next], arr[index]];
         renderConfigVisualEditor(configState);
+        markConfigDirty();
     }
 
     function removeArrayItem(path, index) {
         ensureArray(path).splice(index, 1);
         renderConfigVisualEditor(configState);
+        markConfigDirty();
     }
 
     function addExtractor() {
         ensureArray('identity.extractors').push({source: 'header', key: '', regex: '', group: 0, name: ''});
         renderConfigVisualEditor(configState);
+        markConfigDirty();
     }
 
     function addQuotaRule() {
@@ -2346,6 +2502,7 @@
             request_match: {}
         });
         renderConfigVisualEditor(configState);
+        markConfigDirty();
     }
 
     function toggleMatcher(ruleIndex, matcherKey, enabled) {
@@ -2356,6 +2513,7 @@
             deleteByPath(configState, path);
         }
         renderConfigVisualEditor(configState);
+        markConfigDirty();
     }
 
     function setQuotaExceededBodyMode(ruleIndex, mode) {
@@ -2369,6 +2527,7 @@
             setByPath(configState, path, current ? current : '请求过于频繁，请稍后再试');
         }
         renderConfigVisualEditor(configState);
+        markConfigDirty();
     }
 
     function setQuotaExceededBody(ruleIndex, value) {
@@ -2649,6 +2808,7 @@
             });
             await request('/__admin/config/reload', {method: 'POST'});
             await boot(true);
+            markConfigSaved();
             setStatus(`${data.message || '配置已保存。'}\n文件：${data.config_path || '未知'}`, true, '保存成功');
         }, '确认保存');
     }
@@ -2711,6 +2871,8 @@
 
     switchTab('overview');
     renderAutoRefreshButton();
+    renderBackToTopButton();
+    window.addEventListener('scroll', renderBackToTopButton, {passive: true});
     initializeAuth();
 </script>
 </body>
