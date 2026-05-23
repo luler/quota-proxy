@@ -1003,6 +1003,39 @@
             border-bottom: 1px solid var(--border);
         }
 
+        .config-card-head,
+        .config-subcard-head.collapsible {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .config-card-head::after,
+        .config-subcard-head.collapsible::after {
+            content: "";
+            width: 9px;
+            height: 9px;
+            border-right: 2px solid var(--text-soft);
+            border-bottom: 2px solid var(--text-soft);
+            transform: rotate(45deg);
+            transition: transform .15s ease;
+            flex: 0 0 auto;
+        }
+
+        .config-card.expanded > .config-card-head::after,
+        .config-subcard.expanded > .config-subcard-head.collapsible::after {
+            transform: rotate(225deg);
+        }
+
+        .config-card:not(.expanded) > .config-card-head,
+        .config-subcard:not(.expanded) > .config-subcard-head.collapsible {
+            border-bottom: none;
+        }
+
+        .config-card:not(.expanded) > .config-card-body,
+        .config-subcard:not(.expanded) > .config-subcard-body {
+            display: none;
+        }
+
         .config-card-title,
         .config-subcard-title {
             font-weight: 700;
@@ -1046,6 +1079,7 @@
             gap: 6px;
             flex-wrap: wrap;
             align-items: center;
+            margin-left: auto;
         }
 
         .config-inline-actions button,
@@ -1612,16 +1646,19 @@
                         <div class="toolbar-box">
                             <div class="config-topbar">
                                 <div class="config-mode-tabs" role="tablist" aria-label="配置编辑模式">
-                                    <button id="configModeVisual" type="button" onclick="switchConfigEditMode('visual')">
+                                    <button id="configModeVisual" type="button"
+                                            onclick="switchConfigEditMode('visual')">
                                         可视化编辑
                                     </button>
-                                    <button id="configModeJson" type="button" onclick="switchConfigEditMode('json')">JSON
+                                    <button id="configModeJson" type="button" onclick="switchConfigEditMode('json')">
+                                        JSON
                                         编辑
                                     </button>
                                 </div>
                                 <div class="config-actions">
                                     <button id="saveConfigBtn" onclick="saveConfigPayload()">保存配置</button>
-                                    <button id="formatConfigBtn" class="ghost" onclick="formatConfigEditor()">格式化 JSON
+                                    <button id="formatConfigBtn" class="ghost" onclick="formatConfigEditor()">格式化
+                                        JSON
                                     </button>
                                 </div>
                             </div>
@@ -1643,9 +1680,11 @@
         </div>
     </div>
 </main>
-<button id="backToTopBtn" class="back-to-top" type="button" aria-label="回到顶部" title="回到顶部" onclick="scrollToTop()">
+<button id="backToTopBtn" class="back-to-top" type="button" aria-label="回到顶部" title="回到顶部"
+        onclick="scrollToTop()">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M12 5L5 12M12 5L19 12M12 5V19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 5L5 12M12 5L19 12M12 5V19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+              stroke-linejoin="round"/>
     </svg>
 </button>
 <div id="appModal" class="modal-mask" onclick="handleModalMaskClick(event)">
@@ -1672,6 +1711,8 @@
     let configLoaded = false;
     let configEditMode = 'visual';
     let configState = {};
+    let configCardExpanded = {};
+    let configSubCardExpanded = {};
     let authCode = '';
     let isAuthed = false;
     let authLoading = false;
@@ -2247,6 +2288,16 @@
         return JSON.parse(JSON.stringify(value ?? {}));
     }
 
+    function defaultCopiedQuotaRuleName(name) {
+        const base = name ? `${name}-copy` : '';
+        if (!base) return '';
+        const names = new Set(ensureArray('quota.rules').map(rule => rule?.name).filter(Boolean));
+        if (!names.has(base)) return base;
+        let index = 2;
+        while (names.has(`${base}-${index}`)) index++;
+        return `${base}-${index}`;
+    }
+
     function normalizeConfig(config) {
         const cfg = cloneConfigValue(config);
         cfg.server ||= {};
@@ -2409,30 +2460,56 @@
     }
 
     function renderConfigCard(title, desc, content) {
+        const key = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const expanded = !!configCardExpanded[key];
         return `
-    <div class="config-card">
-      <div class="config-card-head">
+    <div class="config-card ${expanded ? 'expanded' : ''}">
+      <div class="config-card-head" role="button" tabindex="0" onclick="toggleConfigCard('${escapeAttr(key)}')" onkeydown="handleConfigCardKeydown(event, '${escapeAttr(key)}')">
         <div>
           <div class="config-card-title">${escapeHTML(title)}</div>
           <div class="config-card-desc">${escapeHTML(desc)}</div>
         </div>
       </div>
-      ${content}
+      <div class="config-card-body">${content}</div>
     </div>`;
     }
 
-    function renderSubCard(title, desc, actions, content) {
+    function toggleConfigCard(key) {
+        configCardExpanded[key] = !configCardExpanded[key];
+        renderConfigVisualEditor(configState);
+    }
+
+    function handleConfigCardKeydown(event, key) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        toggleConfigCard(key);
+    }
+
+    function renderSubCard(title, desc, actions, content, key = '') {
+        const collapsible = !!key;
+        const expanded = !collapsible || !!configSubCardExpanded[key];
         return `
-    <div class="config-subcard">
-      <div class="config-subcard-head">
+    <div class="config-subcard ${expanded ? 'expanded' : ''}">
+      <div class="config-subcard-head ${collapsible ? 'collapsible' : ''}" ${collapsible ? `role="button" tabindex="0" onclick="toggleConfigSubCard('${escapeAttr(key)}')" onkeydown="handleConfigSubCardKeydown(event, '${escapeAttr(key)}')"` : ''}>
         <div>
           <div class="config-subcard-title">${escapeHTML(title)}</div>
           ${desc ? `<div class="config-subcard-desc">${escapeHTML(desc)}</div>` : ''}
         </div>
         <div class="config-inline-actions">${actions || ''}</div>
       </div>
-      ${content}
+      <div class="config-subcard-body">${content}</div>
     </div>`;
+    }
+
+    function toggleConfigSubCard(key) {
+        configSubCardExpanded[key] = !configSubCardExpanded[key];
+        renderConfigVisualEditor(configState);
+    }
+
+    function handleConfigSubCardKeydown(event, key) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        toggleConfigSubCard(key);
     }
 
     function renderStringList(path, label, placeholder = '', tip = '') {
@@ -2493,7 +2570,8 @@
     }
 
     function addQuotaRule() {
-        ensureArray('quota.rules').push({
+        const rules = ensureArray('quota.rules');
+        rules.push({
             name: '',
             window: 'day',
             window_count: 1,
@@ -2501,6 +2579,19 @@
             include_paths: [],
             request_match: {}
         });
+        configSubCardExpanded[`quota-rule-${rules.length - 1}`] = true;
+        renderConfigVisualEditor(configState);
+        markConfigDirty();
+    }
+
+    function copyQuotaRule(index) {
+        const rules = ensureArray('quota.rules');
+        const source = rules[index];
+        if (!source) return;
+        const copied = cloneConfigValue(source);
+        copied.name = defaultCopiedQuotaRuleName(copied.name);
+        rules.push(copied);
+        configSubCardExpanded[`quota-rule-${rules.length - 1}`] = true;
         renderConfigVisualEditor(configState);
         markConfigDirty();
     }
@@ -2584,9 +2675,10 @@
             const bodyUnset = rule.quota_exceeded_body === undefined || rule.quota_exceeded_body === null;
             const bodyMode = bodyUnset ? 'default' : (rule.quota_exceeded_body === '' ? 'empty' : 'custom');
             const actions = `
-          <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('quota.rules', ${index}, -1)">上移</button>
-          <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('quota.rules', ${index}, 1)">下移</button>
-          <button class="danger config-small-btn" type="button" onclick="removeArrayItem('quota.rules', ${index})">删除</button>`;
+          <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('quota.rules', ${index}, -1); event.stopPropagation();">上移</button>
+          <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('quota.rules', ${index}, 1); event.stopPropagation();">下移</button>
+          <button class="ghost config-small-btn" type="button" onclick="copyQuotaRule(${index}); event.stopPropagation();">复制</button>
+          <button class="danger config-small-btn" type="button" onclick="removeArrayItem('quota.rules', ${index}); event.stopPropagation();">删除</button>`;
             return renderSubCard(rule.name || `Rule #${index + 1}`, '规则按顺序匹配，命中第一条后停止', actions, `
           <div class="config-fields">
             ${configInput(`${base}.name`, 'name', rule.name, 'text', '', '规则名称必须唯一，会用于额度统计和管理页面筛选。')}
@@ -2622,7 +2714,7 @@
             ${renderMatcher(index, 'json_body', 'JSON Body')}
             ${renderMatcher(index, 'headers', 'Headers')}
             ${renderMatcher(index, 'ip', 'IP')}
-          </div>`);
+          </div>`, `quota-rule-${index}`);
         }).join('')}
       <div><button class="ghost" type="button" onclick="addQuotaRule()">添加配额规则</button></div>
     </div>`;
