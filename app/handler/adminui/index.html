@@ -604,6 +604,45 @@
             box-shadow: 0 0 0 3px rgba(79, 70, 229, .15);
         }
 
+        .input-clear-wrap {
+            position: relative;
+        }
+
+        .input-clear-wrap input {
+            padding-right: 42px;
+        }
+
+        button.input-clear-btn {
+            position: absolute;
+            right: 7px;
+            top: 50%;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border-radius: 999px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transform: translateY(-50%);
+            background: #eef2f8;
+            color: var(--text-soft);
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        button.input-clear-btn.show {
+            display: inline-flex;
+        }
+
+        button.input-clear-btn:hover {
+            background: #e2e8f0;
+            color: var(--text);
+        }
+
+        button.input-clear-btn:active {
+            transform: translateY(-50%) scale(.96);
+        }
+
         textarea {
             min-height: 480px;
             resize: vertical;
@@ -990,6 +1029,45 @@
         .config-subcard {
             border-radius: var(--radius-sm);
             background: var(--panel-strong);
+        }
+
+        .config-subcard.dragging {
+            opacity: .55;
+            border-color: var(--primary);
+        }
+
+        .config-subcard.drag-over-before,
+        .config-subcard.drag-over-after {
+            position: relative;
+        }
+
+        .config-subcard.drag-over-before::before,
+        .config-subcard.drag-over-after::after {
+            content: "";
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            height: 3px;
+            border-radius: 999px;
+            background: var(--primary);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .config-subcard.drag-over-before::before {
+            top: 0;
+        }
+
+        .config-subcard.drag-over-after::after {
+            bottom: 0;
+        }
+
+        .config-drag-btn {
+            cursor: grab;
+        }
+
+        .config-drag-btn:active {
+            cursor: grabbing;
         }
 
         .config-card-head,
@@ -1581,11 +1659,19 @@
                     <div class="toolbar">
                         <div class="field">
                             <label for="identityFilter">按标识筛选</label>
-                            <input id="identityFilter" placeholder="例如：ip:127.0.0.1 或 user:alice"/>
+                            <div class="input-clear-wrap">
+                                <input id="identityFilter" placeholder="例如：ip:127.0.0.1 或 user:alice"
+                                       oninput="renderIdentityFilterClearButton()"
+                                       onkeydown="handleIdentityFilterKeydown(event)"/>
+                                <button id="identityFilterClearBtn" class="input-clear-btn" type="button"
+                                        aria-label="清空标识筛选" title="清空"
+                                        onclick="clearIdentityFilterAndQuery()">×
+                                </button>
+                            </div>
                         </div>
                         <div class="field">
                             <label for="ruleFilter">规则</label>
-                            <select id="ruleFilter"></select>
+                            <select id="ruleFilter" onchange="loadQuotas(true, '正在按规则筛选额度列表...')"></select>
                         </div>
                         <div class="field small">
                             <label for="pageSize">每页条数</label>
@@ -1713,6 +1799,7 @@
     let configState = {};
     let configCardExpanded = {};
     let configSubCardExpanded = {};
+    let quotaRuleDragIndex = null;
     let authCode = '';
     let isAuthed = false;
     let authLoading = false;
@@ -2142,9 +2229,36 @@
         }
 
         const ruleFilter = document.getElementById('ruleFilter');
+        const selectedRule = ruleFilter.value;
+        const ruleNames = data.rule_names || [];
         const options = ['<option value="">全部规则</option>']
-            .concat((data.rule_names || []).map(name => `<option value="${escapeAttr(name)}">${escapeHTML(name)}</option>`));
+            .concat(ruleNames.map(name => `<option value="${escapeAttr(name)}">${escapeHTML(name)}</option>`));
         ruleFilter.innerHTML = options.join('');
+        if (selectedRule && ruleNames.includes(selectedRule)) {
+            ruleFilter.value = selectedRule;
+        }
+    }
+
+    function renderIdentityFilterClearButton() {
+        const input = document.getElementById('identityFilter');
+        const btn = document.getElementById('identityFilterClearBtn');
+        if (input && btn) {
+            btn.classList.toggle('show', input.value.length > 0);
+        }
+    }
+
+    function handleIdentityFilterKeydown(event) {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        loadQuotas(true, '正在按标识筛选额度列表...');
+    }
+
+    function clearIdentityFilterAndQuery() {
+        const input = document.getElementById('identityFilter');
+        if (!input) return;
+        input.value = '';
+        renderIdentityFilterClearButton();
+        loadQuotas(true, '正在清空标识筛选...');
     }
 
     function renderQuotas(data) {
@@ -2206,6 +2320,7 @@
             loadingText
         );
         renderQuotas(data);
+        renderIdentityFilterClearButton();
         if (!silent) {
             setStatus('活跃额度列表已刷新。', true, '查询完成');
         }
@@ -2485,11 +2600,13 @@
         toggleConfigCard(key);
     }
 
-    function renderSubCard(title, desc, actions, content, key = '') {
+    function renderSubCard(title, desc, actions, content, key = '', options = {}) {
         const collapsible = !!key;
         const expanded = !collapsible || !!configSubCardExpanded[key];
+        const attrs = options.attrs || '';
+        const extraClass = options.className ? ` ${options.className}` : '';
         return `
-    <div class="config-subcard ${expanded ? 'expanded' : ''}">
+    <div class="config-subcard ${expanded ? 'expanded' : ''}${extraClass}" ${attrs}>
       <div class="config-subcard-head ${collapsible ? 'collapsible' : ''}" ${collapsible ? `role="button" tabindex="0" onclick="toggleConfigSubCard('${escapeAttr(key)}')" onkeydown="handleConfigSubCardKeydown(event, '${escapeAttr(key)}')"` : ''}>
         <div>
           <div class="config-subcard-title">${escapeHTML(title)}</div>
@@ -2561,6 +2678,76 @@
         ensureArray(path).splice(index, 1);
         renderConfigVisualEditor(configState);
         markConfigDirty();
+    }
+
+    function moveQuotaRuleByDrag(fromIndex, toIndex) {
+        const rules = ensureArray('quota.rules');
+        if (fromIndex < 0 || fromIndex >= rules.length || toIndex < 0 || toIndex >= rules.length || fromIndex === toIndex) {
+            return;
+        }
+        const [item] = rules.splice(fromIndex, 1);
+        rules.splice(toIndex, 0, item);
+        collapseQuotaRuleCards();
+        quotaRuleDragIndex = null;
+        renderConfigVisualEditor(configState);
+        markConfigDirty();
+    }
+
+    function collapseQuotaRuleCards() {
+        ensureArray('quota.rules').forEach((_, index) => {
+            configSubCardExpanded[`quota-rule-${index}`] = false;
+        });
+        document.querySelectorAll('.config-quota-rule-card.expanded')
+            .forEach(el => el.classList.remove('expanded'));
+    }
+
+    function clearQuotaRuleDragStyles() {
+        document.querySelectorAll('.config-subcard.dragging, .config-subcard.drag-over-before, .config-subcard.drag-over-after')
+            .forEach(el => el.classList.remove('dragging', 'drag-over-before', 'drag-over-after'));
+    }
+
+    function handleQuotaRuleDragStart(event, index) {
+        event.stopPropagation();
+        quotaRuleDragIndex = index;
+        collapseQuotaRuleCards();
+        const card = event.currentTarget.closest('.config-subcard');
+        if (card) card.classList.add('dragging');
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(index));
+    }
+
+    function handleQuotaRuleDragOver(event, index) {
+        if (quotaRuleDragIndex === null || quotaRuleDragIndex === index) return;
+        event.preventDefault();
+        const card = event.currentTarget;
+        const rect = card.getBoundingClientRect();
+        const after = event.clientY > rect.top + rect.height / 2;
+        card.classList.toggle('drag-over-before', !after);
+        card.classList.toggle('drag-over-after', after);
+        event.dataTransfer.dropEffect = 'move';
+    }
+
+    function handleQuotaRuleDragLeave(event) {
+        event.currentTarget.classList.remove('drag-over-before', 'drag-over-after');
+    }
+
+    function handleQuotaRuleDrop(event, index) {
+        if (quotaRuleDragIndex === null) return;
+        event.preventDefault();
+        const card = event.currentTarget;
+        const rect = card.getBoundingClientRect();
+        const after = event.clientY > rect.top + rect.height / 2;
+        const fromIndex = quotaRuleDragIndex;
+        let toIndex = index + (after ? 1 : 0);
+        if (fromIndex < toIndex) toIndex -= 1;
+        toIndex = Math.max(0, Math.min(toIndex, ensureArray('quota.rules').length - 1));
+        clearQuotaRuleDragStyles();
+        moveQuotaRuleByDrag(fromIndex, toIndex);
+    }
+
+    function handleQuotaRuleDragEnd() {
+        quotaRuleDragIndex = null;
+        clearQuotaRuleDragStyles();
     }
 
     function addExtractor() {
@@ -2664,6 +2851,47 @@
     </label>`, content);
     }
 
+    function updateQuotaRuleHeader(ruleIndex) {
+        const title = document.querySelector(`[data-quota-rule-index="${ruleIndex}"] .config-subcard-title`);
+        const rule = getByPath(configState, `quota.rules.${ruleIndex}`);
+        if (title && rule) {
+            title.textContent = renderQuotaRuleTitle(rule, ruleIndex);
+        }
+    }
+
+    function setQuotaRuleValue(ruleIndex, field, value, type = 'text') {
+        setConfigValue(`quota.rules.${ruleIndex}.${field}`, value, type);
+        updateQuotaRuleHeader(ruleIndex);
+    }
+
+    function quotaRuleInput(ruleIndex, field, label, value, type = 'text', attrs = '', tip = '') {
+        return `
+    <div class="field">
+      <label>${escapeHTML(label)}</label>
+      <input type="${type}" value="${escapeAttr(value ?? '')}" autocomplete="off" ${attrs} oninput="setQuotaRuleValue(${ruleIndex}, '${field}', this.value, '${type === 'number' ? 'number' : 'text'}')" />
+      ${configTip(tip)}
+    </div>`;
+    }
+
+    function quotaRuleSelect(ruleIndex, field, label, value, options, tip = '') {
+        return `
+    <div class="field">
+      <label>${escapeHTML(label)}</label>
+      <select onchange="setQuotaRuleValue(${ruleIndex}, '${field}', this.value)">
+        ${options.map(option => `<option value="${escapeAttr(option)}" ${value === option ? 'selected' : ''}>${escapeHTML(option)}</option>`).join('')}
+      </select>
+      ${configTip(tip)}
+    </div>`;
+    }
+
+    function renderQuotaRuleTitle(rule, index) {
+        const name = rule.name || `Rule #${index + 1}`;
+        const limit = rule.success_limit ?? 0;
+        const count = rule.window_count ?? 1;
+        const window = rule.window || 'day';
+        return `${name}（${limit}/${count} ${window}）`;
+    }
+
     function renderQuotaRules() {
         const rules = ensureArray('quota.rules');
         return `
@@ -2674,17 +2902,19 @@
             const base = `quota.rules.${index}`;
             const bodyUnset = rule.quota_exceeded_body === undefined || rule.quota_exceeded_body === null;
             const bodyMode = bodyUnset ? 'default' : (rule.quota_exceeded_body === '' ? 'empty' : 'custom');
+            const dragAttrs = `data-quota-rule-index="${index}" ondragover="handleQuotaRuleDragOver(event, ${index})" ondragleave="handleQuotaRuleDragLeave(event)" ondrop="handleQuotaRuleDrop(event, ${index})"`;
             const actions = `
+          <button class="ghost config-small-btn config-drag-btn" type="button" draggable="true" title="拖动排序" ondragstart="handleQuotaRuleDragStart(event, ${index})" ondragend="handleQuotaRuleDragEnd()" onclick="event.stopPropagation();">拖动</button>
           <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('quota.rules', ${index}, -1); event.stopPropagation();">上移</button>
           <button class="ghost config-small-btn" type="button" onclick="moveArrayItem('quota.rules', ${index}, 1); event.stopPropagation();">下移</button>
           <button class="ghost config-small-btn" type="button" onclick="copyQuotaRule(${index}); event.stopPropagation();">复制</button>
           <button class="danger config-small-btn" type="button" onclick="removeArrayItem('quota.rules', ${index}); event.stopPropagation();">删除</button>`;
-            return renderSubCard(rule.name || `Rule #${index + 1}`, '规则按顺序匹配，命中第一条后停止', actions, `
+            return renderSubCard(renderQuotaRuleTitle(rule, index), '规则按顺序匹配，命中第一条后停止', actions, `
           <div class="config-fields">
-            ${configInput(`${base}.name`, 'name', rule.name, 'text', '', '规则名称必须唯一，会用于额度统计和管理页面筛选。')}
-            ${configSelect(`${base}.window`, 'window', rule.window || 'day', ['minute', 'hour', 'day'], '额度统计窗口单位：分钟、小时或天。')}
-            ${configInput(`${base}.window_count`, 'window_count', rule.window_count ?? 1, 'number', 'min="1"', '窗口数量，例如 window=day 且 count=7 表示 7 天一个周期。')}
-            ${configInput(`${base}.success_limit`, 'success_limit', rule.success_limit ?? 0, 'number', 'min="0"', '当前窗口内允许的成功请求次数上限。')}
+            ${quotaRuleInput(index, 'name', 'name', rule.name, 'text', '', '规则名称必须唯一，会用于额度统计和管理页面筛选。')}
+            ${quotaRuleSelect(index, 'window', 'window', rule.window || 'day', ['minute', 'hour', 'day'], '额度统计窗口单位：分钟、小时或天。')}
+            ${quotaRuleInput(index, 'window_count', 'window_count', rule.window_count ?? 1, 'number', 'min="1"', '窗口数量，例如 window=day 且 count=7 表示 7 天一个周期。')}
+            ${quotaRuleInput(index, 'success_limit', 'success_limit', rule.success_limit ?? 0, 'number', 'min="0"', '当前窗口内允许的成功请求次数上限。')}
           </div>
           ${renderStringList(`${base}.include_paths`, 'include_paths', '/api/**', '命中这些路径时应用本规则；支持 /api/** 这类前缀通配写法。')}
           <div class="config-stack-inner">
@@ -2714,7 +2944,7 @@
             ${renderMatcher(index, 'json_body', 'JSON Body')}
             ${renderMatcher(index, 'headers', 'Headers')}
             ${renderMatcher(index, 'ip', 'IP')}
-          </div>`, `quota-rule-${index}`);
+          </div>`, `quota-rule-${index}`, {attrs: dragAttrs});
         }).join('')}
       <div><button class="ghost" type="button" onclick="addQuotaRule()">添加配额规则</button></div>
     </div>`;

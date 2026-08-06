@@ -40,6 +40,8 @@ var (
 	ErrInvalidRedisResult = errors.New("invalid redis result")
 )
 
+const quotaStatusPipelineBatchSize = 200
+
 func formatWindow(rule *config.QuotaRuleConfig) string {
 	return strings.ToLower(rule.Window)
 }
@@ -249,14 +251,27 @@ func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string)
 		return nil, err
 	}
 
+	return m.quotaStatusFromRedisResult(rule, result)
+}
+
+func (m *Manager) quotaStatusFromRedisResult(rule *config.QuotaRuleConfig, result interface{}) (*QuotaStatus, error) {
 	res, ok := result.([]interface{})
 	if !ok || len(res) != 3 {
 		return nil, ErrInvalidRedisResult
 	}
 
-	successCount := int(res[0].(int64))
-	pendingCount := int(res[1].(int64))
-	rejected429Count := int(res[2].(int64))
+	successCount, ok := redisInt(res[0])
+	if !ok {
+		return nil, ErrInvalidRedisResult
+	}
+	pendingCount, ok := redisInt(res[1])
+	if !ok {
+		return nil, ErrInvalidRedisResult
+	}
+	rejected429Count, ok := redisInt(res[2])
+	if !ok {
+		return nil, ErrInvalidRedisResult
+	}
 	remaining := rule.SuccessLimit - successCount
 	if remaining < 0 {
 		remaining = 0
@@ -273,6 +288,51 @@ func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string)
 		WindowCount: m.normalizedWindowCount(rule),
 		PeriodKey:   m.getPeriodKey(rule),
 	}, nil
+}
+
+func redisInt(value interface{}) (int, bool) {
+	switch v := value.(type) {
+	case int64:
+		return int(v), true
+	case int:
+		return v, true
+	default:
+		return 0, false
+	}
+}
+
+func (m *Manager) getStatusesByRule(rule *config.QuotaRuleConfig, identities []string) (map[string]*QuotaStatus, error) {
+	statuses := make(map[string]*QuotaStatus, len(identities))
+	if len(identities) == 0 {
+		return statuses, nil
+	}
+
+	periodKey := m.getPeriodKey(rule)
+	ctx := context.Background()
+	for start := 0; start < len(identities); start += quotaStatusPipelineBatchSize {
+		end := start + quotaStatusPipelineBatchSize
+		if end > len(identities) {
+			end = len(identities)
+		}
+		batch := identities[start:end]
+		pipe := m.client.Pipeline()
+		cmds := make([]*redis.Cmd, 0, len(batch))
+		for _, identity := range batch {
+			key := m.buildKey(rule.Name, periodKey, identity)
+			cmds = append(cmds, pipe.Eval(ctx, GetQuotaScript, []string{key}))
+		}
+		if _, err := pipe.Exec(ctx); err != nil {
+			return nil, err
+		}
+		for i, cmd := range cmds {
+			status, err := m.quotaStatusFromRedisResult(rule, cmd.Val())
+			if err != nil {
+				return nil, err
+			}
+			statuses[batch[i]] = status
+		}
+	}
+	return statuses, nil
 }
 
 // Reset 重置配额
@@ -362,6 +422,7 @@ func (m *Manager) ListActiveStatuses(identityFilter, ruleFilter string, page, pa
 			return nil, 0, err
 		}
 
+		filteredIdentities := make([]string, 0, len(identities))
 		for _, identity := range identities {
 			if identityFilter != "" && !strings.Contains(strings.ToLower(identity), identityFilter) {
 				continue
@@ -371,10 +432,17 @@ func (m *Manager) ListActiveStatuses(identityFilter, ruleFilter string, page, pa
 				continue
 			}
 			seen[key] = struct{}{}
+			filteredIdentities = append(filteredIdentities, identity)
+		}
 
-			status, err := m.getStatusByRule(rule, identity)
-			if err != nil {
-				return nil, 0, err
+		statuses, err := m.getStatusesByRule(rule, filteredIdentities)
+		if err != nil {
+			return nil, 0, err
+		}
+		for _, identity := range filteredIdentities {
+			status := statuses[identity]
+			if status == nil {
+				return nil, 0, ErrInvalidRedisResult
 			}
 			rows = append(rows, ActiveQuotaRow{
 				Identity:     identity,
