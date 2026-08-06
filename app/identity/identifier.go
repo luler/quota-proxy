@@ -160,14 +160,16 @@ func (i *Identifier) fallback(c *gin.Context) string {
 
 // GetIdentityType 获取主体类型
 func (i *Identifier) GetIdentityType(identity string) string {
-	// merge_all 下 identity 形如 app_id:X|user_id:Y，类型取第一段
-	head := identity
-	if idx := strings.Index(identity, mergeSeparator); idx > 0 {
-		head = identity[:idx]
+	segments := strings.Split(identity, mergeSeparator)
+	types := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		name, _, ok := strings.Cut(segment, ":")
+		if ok && name != "" {
+			types = append(types, name)
+		}
 	}
-	parts := strings.SplitN(head, ":", 2)
-	if len(parts) == 2 {
-		return parts[0]
+	if len(types) > 0 {
+		return strings.Join(types, mergeSeparator)
 	}
 	return "unknown"
 }

@@ -517,9 +517,16 @@ func (m *Manager) scanRuleIdentities(ruleName, periodKey string) ([]string, erro
 }
 
 func parseIdentityType(identity string) string {
-	parts := strings.SplitN(identity, ":", 2)
-	if len(parts) == 2 && parts[0] != "" {
-		return parts[0]
+	segments := strings.Split(identity, "|")
+	types := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		name, _, ok := strings.Cut(segment, ":")
+		if ok && name != "" {
+			types = append(types, name)
+		}
+	}
+	if len(types) > 0 {
+		return strings.Join(types, "|")
 	}
 	return "unknown"
 }

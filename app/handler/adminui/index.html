@@ -727,6 +727,33 @@
             font-size: 13px;
         }
 
+        .pager-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+            color: var(--text-soft);
+            font-size: 13px;
+        }
+
+        .pager-info {
+            font-weight: 600;
+        }
+
+        .pager-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .pager-actions button {
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
         .table-wrap {
             position: relative;
             border: 1px solid var(--border);
@@ -1671,14 +1698,15 @@
                         </div>
                         <div class="field">
                             <label for="ruleFilter">规则</label>
-                            <select id="ruleFilter" onchange="loadQuotas(true, '正在按规则筛选额度列表...')"></select>
+                            <select id="ruleFilter" onchange="resetQuotaPageAndLoad(true, '正在按规则筛选额度列表...')"></select>
                         </div>
                         <div class="field small">
                             <label for="pageSize">每页条数</label>
-                            <input id="pageSize" type="number" min="1" max="200" value="20"/>
+                            <input id="pageSize" type="number" min="1" max="200" value="20"
+                                   onchange="resetQuotaPageAndLoad(true, '正在按每页条数刷新额度列表...')"/>
                         </div>
                         <div class="actions">
-                            <button onclick="loadQuotas(true)">查询</button>
+                            <button onclick="resetQuotaPageAndLoad(true)">查询</button>
                             <button class="secondary" onclick="toggleAutoRefresh()" id="autoRefreshBtn">自动刷新：关闭
                             </button>
                         </div>
@@ -1712,6 +1740,15 @@
                         </thead>
                         <tbody id="quotaRows"></tbody>
                     </table>
+                </div>
+                <div class="pager-row" id="quotaPager">
+                    <div class="pager-info">尚未加载分页数据</div>
+                    <div class="pager-actions">
+                        <button class="ghost" type="button" disabled>首页</button>
+                        <button class="ghost" type="button" disabled>上一页</button>
+                        <button class="ghost" type="button" disabled>下一页</button>
+                        <button class="ghost" type="button" disabled>末页</button>
+                    </div>
                 </div>
             </section>
         </div>
@@ -1793,6 +1830,7 @@
     let autoRefreshRemaining = 10;
     let activeTab = 'overview';
     let selectedQuota = null;
+    let quotaPage = 1;
     let modalState = {onConfirm: null};
     let configLoaded = false;
     let configEditMode = 'visual';
@@ -1919,12 +1957,15 @@
         const quotaRuleHint = document.getElementById('quotaRuleHint');
         const ruleFilter = document.getElementById('ruleFilter');
         const configEditor = document.getElementById('configEditor');
+        const quotaPager = document.getElementById('quotaPager');
         if (summary) summary.innerHTML = '';
         if (quotaRows) quotaRows.innerHTML = '';
         if (quotaMeta) quotaMeta.textContent = '尚未加载额度数据';
         if (quotaRuleHint) quotaRuleHint.textContent = '当前筛选规则：全部';
+        if (quotaPager) quotaPager.innerHTML = '<div class="pager-info">尚未加载分页数据</div><div class="pager-actions"><button class="ghost" type="button" disabled>首页</button><button class="ghost" type="button" disabled>上一页</button><button class="ghost" type="button" disabled>下一页</button><button class="ghost" type="button" disabled>末页</button></div>';
         if (ruleFilter) ruleFilter.innerHTML = '<option value="">全部规则</option>';
         if (configEditor) configEditor.value = '';
+        quotaPage = 1;
         configState = {};
         renderConfigVisualEditor({});
     }
@@ -2247,10 +2288,65 @@
         }
     }
 
+    function getQuotaPageSize() {
+        const input = document.getElementById('pageSize');
+        let pageSize = Number.parseInt(input?.value || '20', 10);
+        if (Number.isNaN(pageSize) || pageSize < 1) {
+            pageSize = 20;
+        }
+        if (pageSize > 200) {
+            pageSize = 200;
+        }
+        if (input && input.value !== String(pageSize)) {
+            input.value = String(pageSize);
+        }
+        return pageSize;
+    }
+
+    function getQuotaTotalPages(total, pageSize) {
+        const safeTotal = Math.max(0, Number(total) || 0);
+        const safePageSize = Math.max(1, Number(pageSize) || 20);
+        return Math.max(1, Math.ceil(safeTotal / safePageSize));
+    }
+
+    function resetQuotaPageAndLoad(silent = false, loadingText = '正在加载额度列表...') {
+        quotaPage = 1;
+        return loadQuotas(silent, loadingText);
+    }
+
+    function goQuotaPage(page) {
+        const targetPage = Number.parseInt(page, 10);
+        if (Number.isNaN(targetPage) || targetPage < 1 || targetPage === quotaPage) {
+            return;
+        }
+        quotaPage = targetPage;
+        return loadQuotas(true, `正在加载第 ${quotaPage} 页...`);
+    }
+
+    function renderQuotaPager(data) {
+        const pager = document.getElementById('quotaPager');
+        if (!pager) return;
+        const total = Math.max(0, Number(data.total) || 0);
+        const pageSize = Math.max(1, Number(data.page_size) || getQuotaPageSize());
+        const totalPages = getQuotaTotalPages(total, pageSize);
+        const page = Math.min(Math.max(1, Number(data.page) || quotaPage), totalPages);
+        quotaPage = page;
+        const firstDisabled = page <= 1 ? ' disabled' : '';
+        const lastDisabled = page >= totalPages ? ' disabled' : '';
+        pager.innerHTML = `
+                    <div class="pager-info">第 ${escapeHTML(page)} / ${escapeHTML(totalPages)} 页 · 共 ${escapeHTML(total)} 条</div>
+                    <div class="pager-actions">
+                        <button class="ghost" type="button" onclick="goQuotaPage(1)"${firstDisabled}>首页</button>
+                        <button class="ghost" type="button" onclick="goQuotaPage(${escapeHTML(page - 1)})"${firstDisabled}>上一页</button>
+                        <button class="ghost" type="button" onclick="goQuotaPage(${escapeHTML(page + 1)})"${lastDisabled}>下一页</button>
+                        <button class="ghost" type="button" onclick="goQuotaPage(${escapeHTML(totalPages)})"${lastDisabled}>末页</button>
+                    </div>`;
+    }
+
     function handleIdentityFilterKeydown(event) {
         if (event.key !== 'Enter') return;
         event.preventDefault();
-        loadQuotas(true, '正在按标识筛选额度列表...');
+        resetQuotaPageAndLoad(true, '正在按标识筛选额度列表...');
     }
 
     function clearIdentityFilterAndQuery() {
@@ -2258,12 +2354,13 @@
         if (!input) return;
         input.value = '';
         renderIdentityFilterClearButton();
-        loadQuotas(true, '正在清空标识筛选...');
+        resetQuotaPageAndLoad(true, '正在清空标识筛选...');
     }
 
     function renderQuotas(data) {
         document.getElementById('quotaMeta').textContent = `共 ${data.total} 条活跃记录，当前第 ${data.page} 页，每页 ${data.page_size} 条`;
         document.getElementById('quotaRuleHint').textContent = data.filters?.rule ? `当前筛选规则：${data.filters.rule}` : '当前筛选规则：全部';
+        renderQuotaPager(data);
         const tbody = document.getElementById('quotaRows');
         const items = data.items || [];
         const hasSelected = items.some(item => item.identity === selectedQuota?.identity && item.rule_name === selectedQuota?.rule);
@@ -2314,11 +2411,17 @@
     async function loadQuotas(silent = false, loadingText = '正在加载额度列表...') {
         const identity = encodeURIComponent(document.getElementById('identityFilter').value.trim());
         const rule = encodeURIComponent(document.getElementById('ruleFilter').value);
-        const pageSize = encodeURIComponent(document.getElementById('pageSize').value || '20');
+        const pageSize = getQuotaPageSize();
         const data = await withQuotaTableLoading(
-            () => request(`/__admin/quotas?identity=${identity}&rule=${rule}&page_size=${pageSize}`),
+            () => request(`/__admin/quotas?identity=${identity}&rule=${rule}&page=${encodeURIComponent(quotaPage)}&page_size=${encodeURIComponent(pageSize)}`),
             loadingText
         );
+        const totalPages = getQuotaTotalPages(data.total, data.page_size || pageSize);
+        if (quotaPage > totalPages) {
+            quotaPage = totalPages;
+            return loadQuotas(silent, loadingText);
+        }
+        quotaPage = Math.max(1, Number(data.page) || quotaPage);
         renderQuotas(data);
         renderIdentityFilterClearButton();
         if (!silent) {
