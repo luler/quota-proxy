@@ -100,9 +100,8 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 	}, nil
 }
 
-func (m *Manager) buildKey(ruleName, periodKey, identity string) string {
-	// 直接字符串拼接比 fmt.Sprintf 省一次 reflect + interface 装箱
-	return "quota:" + ruleName + ":" + periodKey + ":" + identity
+func (m *Manager) buildKey(periodKey, identity string) string {
+	return "quota:" + periodKey + ":" + identity
 }
 
 func (m *Manager) now() time.Time {
@@ -182,11 +181,14 @@ func (m *Manager) getPeriodKey(rule *config.QuotaRuleConfig) string {
 
 // TryReserve 尝试预占名额
 func (m *Manager) TryReserve(rule *config.QuotaRuleConfig, identity string) (bool, int, int, int, error) {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
+	periodKey := m.getPeriodKey(rule)
+	key := m.buildKey(periodKey, identity)
 	ttl := m.getPeriodTTL(rule)
 
 	ctx := context.Background()
-	result, err := m.client.Eval(ctx, TryReserveScript, []string{key}, rule.SuccessLimit, ttl).Result()
+	result, err := m.client.Eval(ctx, TryReserveScript, []string{key},
+		rule.SuccessLimit, ttl, rule.Name, formatWindow(rule), m.normalizedWindowCount(rule), periodKey,
+	).Result()
 	if err != nil {
 		return false, 0, 0, 0, err
 	}
@@ -206,7 +208,7 @@ func (m *Manager) TryReserve(rule *config.QuotaRuleConfig, identity string) (boo
 
 // Confirm 确认成功
 func (m *Manager) Confirm(rule *config.QuotaRuleConfig, identity string) error {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
+	key := m.buildKey(m.getPeriodKey(rule), identity)
 	ctx := context.Background()
 	_, err := m.client.Eval(ctx, ConfirmScript, []string{key}).Result()
 	return err
@@ -214,7 +216,7 @@ func (m *Manager) Confirm(rule *config.QuotaRuleConfig, identity string) error {
 
 // Rollback 回滚 pending
 func (m *Manager) Rollback(rule *config.QuotaRuleConfig, identity string) error {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
+	key := m.buildKey(m.getPeriodKey(rule), identity)
 	ctx := context.Background()
 	_, err := m.client.Eval(ctx, RollbackScript, []string{key}).Result()
 	return err
@@ -223,11 +225,19 @@ func (m *Manager) Rollback(rule *config.QuotaRuleConfig, identity string) error 
 // GetStatus 获取配额状态
 func (m *Manager) GetStatus(ruleName string, identity string) (*QuotaStatus, error) {
 	rule := m.GetRule(ruleName)
-	if rule == nil {
-		return nil, fmt.Errorf("%w: %s", ErrRuleNotFound, ruleName)
+	if rule != nil {
+		return m.getStatusByRule(rule, identity)
 	}
 
-	return m.getStatusByRule(rule, identity)
+	status, err := m.getActiveStatusByIdentity(identity)
+	if err != nil {
+		return nil, err
+	}
+	if status != nil && (ruleName == "" || status.RuleName == ruleName) {
+		return status, nil
+	}
+
+	return nil, fmt.Errorf("%w: %s", ErrRuleNotFound, ruleName)
 }
 
 // GetAllStatus 获取所有规则的配额状态
@@ -244,7 +254,7 @@ func (m *Manager) GetAllStatus(identity string) ([]*QuotaStatus, error) {
 }
 
 func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string) (*QuotaStatus, error) {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
+	key := m.buildKey(m.getPeriodKey(rule), identity)
 	ctx := context.Background()
 	result, err := m.client.Eval(ctx, GetQuotaScript, []string{key}).Result()
 	if err != nil {
@@ -256,7 +266,7 @@ func (m *Manager) getStatusByRule(rule *config.QuotaRuleConfig, identity string)
 
 func (m *Manager) quotaStatusFromRedisResult(rule *config.QuotaRuleConfig, result interface{}) (*QuotaStatus, error) {
 	res, ok := result.([]interface{})
-	if !ok || len(res) != 3 {
+	if !ok || len(res) < 3 {
 		return nil, ErrInvalidRedisResult
 	}
 
@@ -272,21 +282,54 @@ func (m *Manager) quotaStatusFromRedisResult(rule *config.QuotaRuleConfig, resul
 	if !ok {
 		return nil, ErrInvalidRedisResult
 	}
-	remaining := rule.SuccessLimit - successCount
+
+	ruleName := ""
+	limit := 0
+	window := ""
+	windowCount := 1
+	periodKey := ""
+
+	if len(res) >= 8 {
+		if s, ok := res[3].(string); ok {
+			ruleName = s
+		}
+		if n, ok := redisInt(res[4]); ok {
+			limit = n
+		}
+		if s, ok := res[5].(string); ok {
+			window = s
+		}
+		if n, ok := redisInt(res[6]); ok {
+			windowCount = n
+		}
+		if s, ok := res[7].(string); ok {
+			periodKey = s
+		}
+	}
+
+	if rule != nil {
+		ruleName = rule.Name
+		limit = rule.SuccessLimit
+		window = formatWindow(rule)
+		windowCount = m.normalizedWindowCount(rule)
+		periodKey = m.getPeriodKey(rule)
+	}
+
+	remaining := limit - successCount
 	if remaining < 0 {
 		remaining = 0
 	}
 
 	return &QuotaStatus{
-		RuleName:    rule.Name,
+		RuleName:    ruleName,
 		Success:     successCount,
 		Pending:     pendingCount,
 		Rejected429: rejected429Count,
-		Limit:       rule.SuccessLimit,
+		Limit:       limit,
 		Remaining:   remaining,
-		Window:      formatWindow(rule),
-		WindowCount: m.normalizedWindowCount(rule),
-		PeriodKey:   m.getPeriodKey(rule),
+		Window:      window,
+		WindowCount: windowCount,
+		PeriodKey:   periodKey,
 	}, nil
 }
 
@@ -301,58 +344,22 @@ func redisInt(value interface{}) (int, bool) {
 	}
 }
 
-func (m *Manager) getStatusesByRule(rule *config.QuotaRuleConfig, identities []string) (map[string]*QuotaStatus, error) {
-	statuses := make(map[string]*QuotaStatus, len(identities))
-	if len(identities) == 0 {
-		return statuses, nil
-	}
-
-	periodKey := m.getPeriodKey(rule)
-	ctx := context.Background()
-	for start := 0; start < len(identities); start += quotaStatusPipelineBatchSize {
-		end := start + quotaStatusPipelineBatchSize
-		if end > len(identities) {
-			end = len(identities)
-		}
-		batch := identities[start:end]
-		pipe := m.client.Pipeline()
-		cmds := make([]*redis.Cmd, 0, len(batch))
-		for _, identity := range batch {
-			key := m.buildKey(rule.Name, periodKey, identity)
-			cmds = append(cmds, pipe.Eval(ctx, GetQuotaScript, []string{key}))
-		}
-		if _, err := pipe.Exec(ctx); err != nil {
-			return nil, err
-		}
-		for i, cmd := range cmds {
-			status, err := m.quotaStatusFromRedisResult(rule, cmd.Val())
-			if err != nil {
-				return nil, err
-			}
-			statuses[batch[i]] = status
-		}
-	}
-	return statuses, nil
-}
-
 // Reset 重置配额
 func (m *Manager) Reset(ruleName string, identity string) error {
 	rule := m.GetRule(ruleName)
-	if rule == nil {
-		return fmt.Errorf("%w: %s", ErrRuleNotFound, ruleName)
+	if rule != nil {
+		return m.resetByRule(rule, identity)
 	}
-
-	return m.resetByRule(rule, identity)
+	return m.ResetAll(identity)
 }
 
 // Reject 耗尽剩余额度
 func (m *Manager) Reject(ruleName string, identity string) error {
 	rule := m.GetRule(ruleName)
-	if rule == nil {
-		return fmt.Errorf("%w: %s", ErrRuleNotFound, ruleName)
+	if rule != nil {
+		return m.rejectByRule(rule, identity)
 	}
-
-	return m.rejectByRule(rule, identity)
+	return m.rejectByIdentity(identity)
 }
 
 // RejectAll 耗尽所有规则的剩余额度
@@ -367,24 +374,50 @@ func (m *Manager) RejectAll(identity string) error {
 
 // ResetAll 重置所有规则配额
 func (m *Manager) ResetAll(identity string) error {
-	for i := range m.config.Rules {
-		if err := m.resetByRule(&m.config.Rules[i], identity); err != nil {
-			return err
-		}
+	ctx := context.Background()
+	keys, err := m.scanKeysByIdentity(identity)
+	if err != nil {
+		return err
+	}
+	if len(keys) > 0 {
+		return m.client.Del(ctx, keys...).Err()
 	}
 	return nil
 }
 
 func (m *Manager) rejectByRule(rule *config.QuotaRuleConfig, identity string) error {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
+	key := m.buildKey(m.getPeriodKey(rule), identity)
 	ttl := m.getPeriodTTL(rule)
 	ctx := context.Background()
 	_, err := m.client.Eval(ctx, RejectScript, []string{key}, rule.SuccessLimit, ttl).Result()
 	return err
 }
 
+func (m *Manager) rejectByIdentity(identity string) error {
+	keys, err := m.scanKeysByIdentity(identity)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	for _, key := range keys {
+		limitVal, err := m.client.HGet(ctx, key, "limit").Int()
+		if err != nil || limitVal <= 0 {
+			limitVal = 1
+		}
+		ttl, err := m.client.TTL(ctx, key).Result()
+		ttlSec := int(ttl.Seconds())
+		if ttlSec <= 0 {
+			ttlSec = 86400
+		}
+		if _, err := m.client.Eval(ctx, RejectScript, []string{key}, limitVal, ttlSec).Result(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *Manager) resetByRule(rule *config.QuotaRuleConfig, identity string) error {
-	key := m.buildKey(rule.Name, m.getPeriodKey(rule), identity)
+	key := m.buildKey(m.getPeriodKey(rule), identity)
 	ctx := context.Background()
 	_, err := m.client.Eval(ctx, ResetScript, []string{key}).Result()
 	return err
@@ -401,63 +434,92 @@ func (m *Manager) ListActiveStatuses(identityFilter, ruleFilter string, page, pa
 		pageSize = 200
 	}
 
-	rules := m.config.Rules
-	if ruleFilter != "" {
-		rule := m.GetRule(ruleFilter)
-		if rule == nil {
-			return nil, 0, fmt.Errorf("%w: %s", ErrRuleNotFound, ruleFilter)
-		}
-		rules = []config.QuotaRuleConfig{*rule}
-	}
-
-	seen := make(map[string]struct{})
-	rows := make([]ActiveQuotaRow, 0)
 	identityFilter = strings.ToLower(identityFilter)
 
-	for i := range rules {
-		rule := &rules[i]
-		periodKey := m.getPeriodKey(rule)
-		identities, err := m.scanRuleIdentities(rule.Name, periodKey)
-		if err != nil {
+	keys, err := m.scanAllQuotaKeys()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	type keyMeta struct {
+		key       string
+		periodKey string
+		identity  string
+	}
+	filteredKeys := make([]keyMeta, 0, len(keys))
+	for _, k := range keys {
+		rem := strings.TrimPrefix(k, "quota:")
+		pKey, ident, ok := strings.Cut(rem, ":")
+		if !ok || pKey == "" || ident == "" {
+			continue
+		}
+		if identityFilter != "" && !strings.Contains(strings.ToLower(ident), identityFilter) {
+			continue
+		}
+		filteredKeys = append(filteredKeys, keyMeta{key: k, periodKey: pKey, identity: ident})
+	}
+
+	if len(filteredKeys) == 0 {
+		return []ActiveQuotaRow{}, 0, nil
+	}
+
+	ctx := context.Background()
+	statuses := make([]*QuotaStatus, 0, len(filteredKeys))
+	for start := 0; start < len(filteredKeys); start += quotaStatusPipelineBatchSize {
+		end := start + quotaStatusPipelineBatchSize
+		if end > len(filteredKeys) {
+			end = len(filteredKeys)
+		}
+		batch := filteredKeys[start:end]
+		pipe := m.client.Pipeline()
+		cmds := make([]*redis.Cmd, len(batch))
+		for i, km := range batch {
+			cmds[i] = pipe.Eval(ctx, GetQuotaScript, []string{km.key})
+		}
+		if _, err := pipe.Exec(ctx); err != nil {
 			return nil, 0, err
 		}
+		for i, cmd := range cmds {
+			km := batch[i]
+			status, err := m.quotaStatusFromRedisResult(nil, cmd.Val())
+			if err != nil {
+				return nil, 0, err
+			}
+			if cfgRule := m.GetRule(status.RuleName); cfgRule != nil {
+				status.Limit = cfgRule.SuccessLimit
+				status.Window = formatWindow(cfgRule)
+				status.WindowCount = m.normalizedWindowCount(cfgRule)
+				status.Remaining = status.Limit - status.Success
+				if status.Remaining < 0 {
+					status.Remaining = 0
+				}
+			}
+			if status.PeriodKey == "" {
+				status.PeriodKey = km.periodKey
+			}
+			statuses = append(statuses, status)
+		}
+	}
 
-		filteredIdentities := make([]string, 0, len(identities))
-		for _, identity := range identities {
-			if identityFilter != "" && !strings.Contains(strings.ToLower(identity), identityFilter) {
-				continue
-			}
-			key := rule.Name + "\x00" + identity
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-			filteredIdentities = append(filteredIdentities, identity)
+	rows := make([]ActiveQuotaRow, 0, len(filteredKeys))
+	for i, km := range filteredKeys {
+		status := statuses[i]
+		if ruleFilter != "" && status.RuleName != ruleFilter {
+			continue
 		}
-
-		statuses, err := m.getStatusesByRule(rule, filteredIdentities)
-		if err != nil {
-			return nil, 0, err
-		}
-		for _, identity := range filteredIdentities {
-			status := statuses[identity]
-			if status == nil {
-				return nil, 0, ErrInvalidRedisResult
-			}
-			rows = append(rows, ActiveQuotaRow{
-				Identity:     identity,
-				IdentityType: parseIdentityType(identity),
-				RuleName:     status.RuleName,
-				Success:      status.Success,
-				Pending:      status.Pending,
-				Rejected429:  status.Rejected429,
-				Limit:        status.Limit,
-				Remaining:    status.Remaining,
-				Window:       status.Window,
-				WindowCount:  status.WindowCount,
-				PeriodKey:    status.PeriodKey,
-			})
-		}
+		rows = append(rows, ActiveQuotaRow{
+			Identity:     km.identity,
+			IdentityType: parseIdentityType(km.identity),
+			RuleName:     status.RuleName,
+			Success:      status.Success,
+			Pending:      status.Pending,
+			Rejected429:  status.Rejected429,
+			Limit:        status.Limit,
+			Remaining:    status.Remaining,
+			Window:       status.Window,
+			WindowCount:  status.WindowCount,
+			PeriodKey:    status.PeriodKey,
+		})
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
@@ -482,38 +544,62 @@ func (m *Manager) ListActiveStatuses(identityFilter, ruleFilter string, page, pa
 	return rows[start:end], total, nil
 }
 
-func (m *Manager) scanRuleIdentities(ruleName, periodKey string) ([]string, error) {
+func (m *Manager) scanAllQuotaKeys() ([]string, error) {
 	ctx := context.Background()
-	pattern := m.buildKey(ruleName, periodKey, "*")
 	cursor := uint64(0)
-	identities := make([]string, 0)
+	keys := make([]string, 0)
 	seen := make(map[string]struct{})
-	prefix := "quota:" + ruleName + ":" + periodKey + ":"
 
 	for {
-		keys, next, err := m.client.Scan(ctx, cursor, pattern, 200).Result()
+		batch, next, err := m.client.Scan(ctx, cursor, "quota:*", 200).Result()
 		if err != nil {
 			return nil, err
 		}
-		for _, key := range keys {
-			identity, ok := strings.CutPrefix(key, prefix)
-			if !ok || identity == "" {
-				continue
+		for _, k := range batch {
+			if _, ok := seen[k]; !ok {
+				seen[k] = struct{}{}
+				keys = append(keys, k)
 			}
-			if _, exists := seen[identity]; exists {
-				continue
-			}
-			seen[identity] = struct{}{}
-			identities = append(identities, identity)
 		}
 		if next == 0 {
 			break
 		}
 		cursor = next
 	}
+	sort.Strings(keys)
+	return keys, nil
+}
 
-	sort.Strings(identities)
-	return identities, nil
+func (m *Manager) scanKeysByIdentity(identity string) ([]string, error) {
+	keys, err := m.scanAllQuotaKeys()
+	if err != nil {
+		return nil, err
+	}
+	matched := make([]string, 0)
+	for _, k := range keys {
+		rem := strings.TrimPrefix(k, "quota:")
+		_, ident, ok := strings.Cut(rem, ":")
+		if ok && ident == identity {
+			matched = append(matched, k)
+		}
+	}
+	return matched, nil
+}
+
+func (m *Manager) getActiveStatusByIdentity(identity string) (*QuotaStatus, error) {
+	keys, err := m.scanKeysByIdentity(identity)
+	if err != nil {
+		return nil, err
+	}
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	ctx := context.Background()
+	result, err := m.client.Eval(ctx, GetQuotaScript, []string{keys[0]}).Result()
+	if err != nil {
+		return nil, err
+	}
+	return m.quotaStatusFromRedisResult(nil, result)
 }
 
 func parseIdentityType(identity string) string {

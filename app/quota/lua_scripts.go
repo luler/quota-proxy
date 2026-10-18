@@ -6,11 +6,21 @@ package quota
 // KEYS[1]: quota key
 // ARGV[1]: limit
 // ARGV[2]: ttl (seconds)
+// ARGV[3]: rule_name
+// ARGV[4]: window
+// ARGV[5]: window_count
+// ARGV[6]: period_key
 // 返回: {成功标志(1/0), success_count, pending_count, rejected_429_count}
 const TryReserveScript = `
 local key = KEYS[1]
 local limit = tonumber(ARGV[1])
 local ttl = tonumber(ARGV[2])
+local rule_name = ARGV[3] or ''
+local window = ARGV[4] or ''
+local window_count = tonumber(ARGV[5] or 1)
+local period_key = ARGV[6] or ''
+
+redis.call('HSET', key, 'rule_name', rule_name, 'limit', limit, 'window', window, 'window_count', window_count, 'period_key', period_key)
 
 local success = tonumber(redis.call('HGET', key, 'success') or 0)
 local pending = tonumber(redis.call('HGET', key, 'pending') or 0)
@@ -51,13 +61,18 @@ return 1
 
 // GetQuotaScript 获取配额状态脚本
 // KEYS[1]: quota key
-// 返回: {success, pending, rejected_429}
+// 返回: {success, pending, rejected_429, rule_name, limit, window, window_count, period_key}
 const GetQuotaScript = `
 local key = KEYS[1]
 local success = tonumber(redis.call('HGET', key, 'success') or 0)
 local pending = tonumber(redis.call('HGET', key, 'pending') or 0)
 local rejected429 = tonumber(redis.call('HGET', key, 'rejected_429') or 0)
-return {success, pending, rejected429}
+local rule_name = redis.call('HGET', key, 'rule_name') or ''
+local limit = tonumber(redis.call('HGET', key, 'limit') or 0)
+local window = redis.call('HGET', key, 'window') or ''
+local window_count = tonumber(redis.call('HGET', key, 'window_count') or 1)
+local period_key = redis.call('HGET', key, 'period_key') or ''
+return {success, pending, rejected429, rule_name, limit, window, window_count, period_key}
 `
 
 // RejectScript 耗尽剩余额度脚本
